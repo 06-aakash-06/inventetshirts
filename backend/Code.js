@@ -1,19 +1,22 @@
 const CACHE_KEY = "INVENTE_ORDERS";
 const SHEET_NAME = "Form Responses 1"; // Make sure to adjust if your sheet name is different
-const CACHE_TIME = 21600;
+const CACHE_TIME = 5; // 5-second cache to allow real-time new form submissions while buffering simultaneous team polls
 
 function doGet(e) {
   const action = e.parameter.action;
+  const noCache = e.parameter.nocache === "1";
   
   if (action === "getOrders") {
     const cache = CacheService.getScriptCache();
-    const cachedData = cache.get(CACHE_KEY);
     
-    if (cachedData) {
-      return ContentService.createTextOutput(cachedData).setMimeType(ContentService.MimeType.JSON);
+    if (!noCache) {
+      const cachedData = cache.get(CACHE_KEY);
+      if (cachedData) {
+        return ContentService.createTextOutput(cachedData).setMimeType(ContentService.MimeType.JSON);
+      }
     }
     
-    // Cache miss, read from sheet
+    // Cache miss or noCache requested, read from sheet
     const lock = LockService.getScriptLock();
     try {
       // Need a lock just in case we are generating Order IDs for new rows during this read
@@ -85,7 +88,7 @@ function doPost(e) {
       throw new Error("Unknown action");
     }
     
-    // Invalidate Cache
+    // Invalidate Cache immediately
     CacheService.getScriptCache().remove(CACHE_KEY);
     
     // Return fresh updated row
@@ -160,6 +163,11 @@ function getOrdersFromSheet() {
   for (let i = 1; i < values.length; i++) {
     let row = values[i];
     
+    // Skip completely empty rows
+    if (!row || row.every(cell => cell === "" || cell === null)) {
+      continue;
+    }
+    
     // Check if Order ID is missing
     if (!row[orderIdColIdx]) {
       const newOrderId = "INV-" + nextOrderIdNumber.toString().padStart(4, "0");
@@ -184,7 +192,7 @@ function getOrdersFromSheet() {
     orders.push(rowToObject(row, headers, i + 1));
   }
   
-  // If we made changes to the sheet (generated IDs), wait a moment to make sure Google Sheets syncs
+  // If we made changes to the sheet (generated IDs), sync immediately
   if (hasUpdates) {
     SpreadsheetApp.flush();
   }
@@ -206,4 +214,13 @@ function rowToObject(row, headers, rowIndex) {
     }
   }
   return obj;
+}
+
+// Optional trigger functions to automatically invalidate cache on edit or form submit
+function onFormSubmit(e) {
+  CacheService.getScriptCache().remove(CACHE_KEY);
+}
+
+function onEdit(e) {
+  CacheService.getScriptCache().remove(CACHE_KEY);
 }
