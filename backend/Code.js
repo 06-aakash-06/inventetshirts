@@ -1,6 +1,6 @@
 const CACHE_KEY = "INVENTE_ORDERS_V2";
 const SHEET_NAME = "Form Responses 1"; // Make sure to adjust if your sheet name is different
-const CACHE_TIME = 5; // 5-second cache to allow real-time new form submissions while buffering simultaneous team polls
+const CACHE_TIME = 2; // 2-second cache for ultra-fast near instantaneous updates
 
 function doGet(e) {
   const action = e.parameter.action;
