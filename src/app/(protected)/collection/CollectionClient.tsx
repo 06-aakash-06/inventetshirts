@@ -12,12 +12,14 @@ export default function CollectionClient({ userName }: { userName: string }) {
   const [search, setSearch] = useState("");
   const [updating, setUpdating] = useState(false);
 
-  const matchedOrder = search.length >= 3 
+  const searchTrimmed = search.trim().toLowerCase();
+  const matchedOrder = searchTrimmed.length >= 3 
     ? orders.find(o => 
-        o["Order ID"]?.toLowerCase() === search.toLowerCase() ||
-        o["Register Number"]?.toLowerCase() === search.toLowerCase() ||
-        o["Digital ID"]?.toLowerCase() === search.toLowerCase()
-      ) || orders.find(o => o["Name"]?.toLowerCase().includes(search.toLowerCase())) // Fallback to partial name match
+        String(o["Order ID"] || "").toLowerCase() === searchTrimmed ||
+        String(o["Register Number"] || "").toLowerCase() === searchTrimmed ||
+        String(o["Digital ID"] || "").toLowerCase() === searchTrimmed ||
+        String(o["Phone Number"] || "").toLowerCase() === searchTrimmed
+      ) || orders.find(o => String(o["Name"] || "").toLowerCase().includes(searchTrimmed)) // Fallback to partial name match
     : null;
 
   const handleGive = async () => {

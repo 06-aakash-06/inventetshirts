@@ -16,14 +16,14 @@ export default function OrdersPage() {
 
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
-      const s = search.toLowerCase();
+      const s = search.trim().toLowerCase();
       const matchesSearch = !s || (
-        o["Order ID"]?.toLowerCase().includes(s) ||
-        o["Name"]?.toLowerCase().includes(s) ||
-        o["Register Number"]?.toLowerCase().includes(s) ||
-        o["Digital ID"]?.toLowerCase().includes(s) ||
-        o["Phone Number"]?.toLowerCase().includes(s) ||
-        o["College Email"]?.toLowerCase().includes(s)
+        String(o["Order ID"] || "").toLowerCase().includes(s) ||
+        String(o["Name"] || "").toLowerCase().includes(s) ||
+        String(o["Register Number"] || "").toLowerCase().includes(s) ||
+        String(o["Digital ID"] || "").toLowerCase().includes(s) ||
+        String(o["Phone Number"] || "").toLowerCase().includes(s) ||
+        String(o["College Email"] || "").toLowerCase().includes(s)
       );
 
       const matchesPayment = filterPayment === "ALL" || o["Payment Status"] === filterPayment;
