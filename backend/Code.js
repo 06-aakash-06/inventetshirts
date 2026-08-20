@@ -1,4 +1,4 @@
-const CACHE_KEY = "INVENTE_ORDERS";
+const CACHE_KEY = "INVENTE_ORDERS_V2";
 const SHEET_NAME = "Form Responses 1"; // Make sure to adjust if your sheet name is different
 const CACHE_TIME = 5; // 5-second cache to allow real-time new form submissions while buffering simultaneous team polls
 
@@ -50,7 +50,7 @@ function doPost(e) {
   
   try {
     lock.waitLock(10000);
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+    const sheet = getSheet();
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     const orderIdColIdx = headers.indexOf("Order ID") + 1;
     
@@ -129,8 +129,13 @@ function ensureColumnsExist(sheet, headers) {
   return changed;
 }
 
+function getSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  return ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
+}
+
 function getOrdersFromSheet() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  const sheet = getSheet();
   let headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   
   // Ensure we have our custom columns
