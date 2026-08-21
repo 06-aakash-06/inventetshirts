@@ -50,41 +50,41 @@
   --radius-sm: calc(var(--radius) - 4px);
 }
 
-/* Swiss Bauhaus Typography & Design */
+/* Matte Swiss Bauhaus Typography & Design */
 :root {
-  --background: #000000; /* Pure Black */
-  --foreground: #FFFFFF; /* Pure White */
+  --background: #121212; /* Deep matte charcoal */
+  --foreground: #F5F5F0; /* Soft off-white */
 
-  --card: #0A0A0A; /* Slightly off-black for subtle hierarchy */
-  --card-foreground: #FFFFFF;
+  --card: #181818; /* Slightly elevated charcoal */
+  --card-foreground: #F5F5F0;
 
-  --popover: #0A0A0A;
-  --popover-foreground: #FFFFFF;
+  --popover: #181818;
+  --popover-foreground: #F5F5F0;
 
-  --primary: #FF3333; /* Bauhaus Red */
-  --primary-foreground: #000000; 
+  --primary: #C44536; /* Matte Terracotta Red */
+  --primary-foreground: #121212; 
 
-  --secondary: #0055FF; /* Swiss Blue */
-  --secondary-foreground: #FFFFFF;
+  --secondary: #4A6FA5; /* Matte Slate Blue */
+  --secondary-foreground: #F5F5F0;
 
-  --muted: #111111;
-  --muted-foreground: #888888;
+  --muted: #1E1E1E;
+  --muted-foreground: #9E9E9E;
 
-  --accent: #FFFFFF; /* White block accents */
-  --accent-foreground: #000000;
+  --accent: #F5F5F0; /* Off-white block accents */
+  --accent-foreground: #121212;
 
-  --destructive: #FF0000; /* Pure Red */
-  --destructive-foreground: #FFFFFF;
+  --destructive: #D32F2F; /* Matte Red */
+  --destructive-foreground: #F5F5F0;
   
-  --success: #00C853; /* Pure Green */
-  --success-foreground: #000000; 
+  --success: #558B6E; /* Matte Sage Green */
+  --success-foreground: #121212; 
   
-  --warning: #FFD600; /* Pure Yellow */
-  --warning-foreground: #000000;
+  --warning: #E3B341; /* Matte Mustard Yellow */
+  --warning-foreground: #121212;
 
-  --border: #333333; /* Sharp structural grid lines */
-  --input: #111111;
-  --ring: #FF3333;
+  --border: #3A3A3A; /* Matte gray grid lines */
+  --input: #1E1E1E;
+  --ring: #C44536;
 
   --radius: 0rem; /* Strictly no border radius */
 }

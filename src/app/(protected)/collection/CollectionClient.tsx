@@ -77,89 +77,85 @@ export default function CollectionClient({ userName }: { userName: string }) {
   };
 
   return (
-    <div className="p-4 space-y-6 container mx-auto max-w-lg flex flex-col items-center">
-      <h1 className="text-3xl font-black tracking-widest text-center w-full mt-4 text-primary">DISTRIBUTION</h1>
+    <div className="p-4 sm:p-8 space-y-0 container mx-auto max-w-4xl flex flex-col">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-2 border-border pb-4 mb-12">
+        <h1 className="text-5xl sm:text-7xl md:text-8xl font-black tracking-tighter uppercase leading-none">Distribution</h1>
+      </div>
       
-      <div className="w-full flex gap-2">
-        <Input 
+      <div className="flex flex-col md:flex-row border-t-2 border-l-2 border-border mb-12 group hover:bg-foreground hover:text-background transition-colors duration-0 cursor-default">
+        <input 
           autoFocus
-          className="flex-1 text-lg py-8 font-mono text-center brutal-shadow focus-visible:translate-x-[4px] focus-visible:translate-y-[4px] border-2"
-          placeholder="Scan ID / Reg No / Name..."
+          className="flex-1 text-2xl md:text-4xl p-6 md:p-8 font-black tracking-tighter bg-transparent border-r-2 border-b-2 border-border group-hover:border-background focus:outline-none uppercase placeholder:text-muted-foreground"
+          placeholder="Scan or type ID..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <Button 
-          variant="default"
-          className="h-auto px-6 py-8 font-black tracking-widest text-lg brutal-shadow border-2"
+        <button 
+          className="w-full md:w-64 p-6 md:p-8 text-2xl font-black tracking-widest uppercase border-r-2 border-b-2 border-border group-hover:border-background hover:bg-primary hover:text-primary-foreground group-hover:hover:bg-primary group-hover:hover:text-primary-foreground transition-colors duration-0"
           onClick={() => setIsScanning(true)}
           disabled={isScanning}
         >
           SCAN QR
-        </Button>
+        </button>
       </div>
 
       {isScanning && (
-        <div className="w-full relative brutal-shadow border-2 bg-black overflow-hidden flex flex-col items-center justify-center p-4">
-          <div id="qr-reader" className="w-full max-w-sm h-[300px] sm:h-[400px] mb-4 bg-background"></div>
-          <Button variant="destructive" className="w-full font-bold uppercase tracking-widest absolute bottom-4 max-w-xs z-10" onClick={() => setIsScanning(false)}>
+        <div className="w-full border-2 border-border bg-background flex flex-col mb-12 p-4">
+          <div id="qr-reader" className="w-full min-h-[300px] bg-background"></div>
+          <button className="w-full p-4 mt-4 font-black uppercase tracking-widest border-2 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors duration-0" onClick={() => setIsScanning(false)}>
             CANCEL SCAN
-          </Button>
+          </button>
         </div>
       )}
 
       {search.length >= 3 && !matchedOrder && (
-        <div className="text-muted-foreground font-mono mt-8 border border-destructive/50 bg-destructive/10 p-4 text-destructive w-full text-center brutal-shadow">
-          No matching order found.
+        <div className="p-12 border-2 border-destructive bg-destructive/10 text-destructive text-center font-black uppercase tracking-widest text-2xl mb-12">
+          No matching order found
         </div>
       )}
 
       {matchedOrder && (
-        <Card className="w-full mt-4 brutal-shadow border-2">
-          <CardContent className="p-6 space-y-6 flex flex-col items-center text-center">
-            <div className="space-y-1 w-full border-b border-border/50 pb-4">
-              <h2 className="text-2xl font-black">{matchedOrder["Name"]}</h2>
-              <p className="font-mono text-muted-foreground text-lg">{matchedOrder["Register Number"]} • {matchedOrder["Order ID"]}</p>
+        <div className="border-t-2 border-l-2 border-border flex flex-col">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-0">
+            <div className="p-8 md:col-span-2 border-r-2 border-b-2 border-border bg-background flex flex-col justify-center">
+              <h2 className="text-4xl sm:text-6xl font-black uppercase leading-none tracking-tighter mb-4">{matchedOrder["Name"]}</h2>
+              <p className="font-bold text-xl uppercase tracking-widest text-muted-foreground">{matchedOrder["Register Number"]} <span className="mx-2">•</span> {matchedOrder["Order ID"]}</p>
+            </div>
+            <div className="p-8 border-r-2 border-b-2 border-border bg-background flex flex-col items-center justify-center">
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] mb-2">Size</span>
+              <span className="text-6xl font-black">{matchedOrder["T-Shirt Size"]}</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-0 border-r-2 border-border">
+            <div className={`p-8 flex flex-col items-center justify-center border-b-2 border-r-2 md:border-r-0 border-border ${matchedOrder["Payment Status"] === "PAID" ? "bg-success text-success-foreground" : "bg-warning text-warning-foreground"}`}>
+              <span className="text-sm font-bold uppercase tracking-[0.2em] mb-2">Payment</span>
+              <span className="text-4xl font-black tracking-tighter uppercase">{matchedOrder["Payment Status"]}</span>
             </div>
             
-            <div className="flex flex-col items-center gap-2 bg-muted w-full p-6 brutal-shadow border border-border">
-              <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Size</span>
-              <span className="text-6xl font-black text-primary">{matchedOrder["T-Shirt Size"]}</span>
+            <div className={`p-8 flex flex-col items-center justify-center border-b-2 border-border border-l-0 md:border-l-2 ${matchedOrder["Collection Status"] === "COLLECTED" ? "bg-primary text-primary-foreground" : "bg-background text-foreground"}`}>
+              <span className="text-sm font-bold uppercase tracking-[0.2em] mb-2">Collection</span>
+              <span className="text-4xl font-black tracking-tighter uppercase">{matchedOrder["Collection Status"] === "COLLECTED" ? "COLLECTED" : "READY"}</span>
             </div>
+          </div>
 
-            <div className="flex gap-4 w-full justify-center">
-              {matchedOrder["Payment Status"] === "PAID" ? (
-                <Badge variant="success" className="px-4 py-1 text-sm font-bold tracking-widest">PAID</Badge>
-              ) : (
-                <Badge variant="warning" className="px-4 py-1 text-sm font-bold tracking-widest">PENDING PAY</Badge>
-              )}
-              
-              {matchedOrder["Collection Status"] === "COLLECTED" ? (
-                <Badge variant="success" className="px-4 py-1 text-sm font-bold tracking-widest">COLLECTED</Badge>
-              ) : (
-                <Badge variant="outline" className="px-4 py-1 text-sm font-bold tracking-widest bg-background">READY</Badge>
-              )}
+          {matchedOrder["Collection Status"] === "NOT_COLLECTED" && (
+            <button 
+              className={`w-full p-8 text-3xl font-black tracking-widest uppercase border-r-2 border-b-2 border-border transition-colors duration-0 ${matchedOrder["Payment Status"] === "PAID" ? "bg-foreground text-background hover:bg-background hover:text-foreground" : "bg-muted text-muted-foreground cursor-not-allowed"}`}
+              disabled={updating || matchedOrder["Payment Status"] !== "PAID"}
+              onClick={handleGive}
+            >
+              {matchedOrder["Payment Status"] === "PAID" ? "GIVE T-SHIRT" : "PAYMENT PENDING"}
+            </button>
+          )}
+          
+          {matchedOrder["Collection Status"] === "COLLECTED" && (
+            <div className="w-full p-8 border-r-2 border-b-2 border-border bg-background text-center flex flex-col">
+              <span className="text-xl font-bold uppercase tracking-widest mb-2">Collected by {matchedOrder["Collector"]}</span>
+              <span className="text-sm font-bold text-muted-foreground uppercase tracking-[0.2em]">{new Date(matchedOrder["Collected At"]).toLocaleString()}</span>
             </div>
-
-            {matchedOrder["Collection Status"] === "NOT_COLLECTED" && (
-              <Button 
-                size="lg" 
-                className="w-full h-16 text-xl font-black tracking-widest mt-4 brutal-shadow-hover transition-transform"
-                disabled={updating || matchedOrder["Payment Status"] !== "PAID"}
-                onClick={handleGive}
-                variant={matchedOrder["Payment Status"] === "PAID" ? "default" : "secondary"}
-              >
-                {matchedOrder["Payment Status"] === "PAID" ? "GIVE T-SHIRT" : "PAYMENT PENDING"}
-              </Button>
-            )}
-            
-            {matchedOrder["Collection Status"] === "COLLECTED" && (
-              <div className="w-full p-4 border border-success bg-success text-success-foreground font-bold brutal-shadow mt-4">
-                Collected by {matchedOrder["Collector"]}<br/>
-                <span className="text-xs font-mono font-normal opacity-80">{new Date(matchedOrder["Collected At"]).toLocaleString()}</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          )}
+        </div>
       )}
     </div>
   );

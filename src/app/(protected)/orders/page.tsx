@@ -34,108 +34,103 @@ export default function OrdersPage() {
   }, [orders, search, filterPayment, filterCollection]);
 
   return (
-    <div className="p-4 sm:p-8 space-y-6 container mx-auto flex-1 flex flex-col">
-      <div className="flex justify-between items-end">
-        <h1 className="text-3xl font-bold tracking-tighter">Orders</h1>
+    <div className="p-4 sm:p-8 space-y-0 container mx-auto flex-1 flex flex-col">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-2 border-border pb-4 mb-12">
+        <h1 className="text-5xl sm:text-7xl md:text-8xl font-black tracking-tighter uppercase leading-none">Orders</h1>
       </div>
 
-      <Card className="flex-none brutal-shadow">
-        <CardContent className="p-4 space-y-4 sm:space-y-0 sm:flex sm:gap-4 sm:items-end">
-          <div className="flex-1 space-y-2">
-            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Search</label>
-            <Input 
-              placeholder="Search ID, Name, Reg No, Digital ID..." 
+      <div className="border-t-2 border-l-2 border-border mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-0">
+          <div className="p-6 border-r-2 border-b-2 border-border bg-background flex flex-col justify-end min-h-[120px] group hover:bg-foreground hover:text-background transition-colors duration-0 cursor-default">
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] mb-4 group-hover:text-background">Search</label>
+            <input 
+              type="text"
+              placeholder="ID, Name, Reg No..." 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="max-w-md font-mono"
+              className="w-full bg-transparent border-b-2 border-border group-hover:border-background font-mono text-xl focus:outline-none focus:border-primary uppercase placeholder:text-muted-foreground"
             />
           </div>
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Payment</label>
+          <div className="p-6 border-r-2 border-b-2 border-border bg-background flex flex-col justify-end min-h-[120px] group hover:bg-foreground hover:text-background transition-colors duration-0">
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] mb-4 group-hover:text-background">Payment</label>
             <select 
               value={filterPayment}
               onChange={(e) => setFilterPayment(e.target.value)}
-              className="flex h-9 w-full border border-border bg-background px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring brutal-shadow"
+              className="w-full bg-transparent border-b-2 border-border group-hover:border-background font-bold text-xl focus:outline-none uppercase cursor-pointer"
             >
-              <option value="ALL">All</option>
-              <option value="PAID">Paid</option>
-              <option value="PENDING">Pending</option>
+              <option value="ALL">ALL</option>
+              <option value="PAID">PAID</option>
+              <option value="PENDING">PENDING</option>
             </select>
           </div>
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Collection</label>
+          <div className="p-6 border-r-2 border-b-2 border-border bg-background flex flex-col justify-end min-h-[120px] group hover:bg-foreground hover:text-background transition-colors duration-0">
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] mb-4 group-hover:text-background">Collection</label>
             <select 
               value={filterCollection}
               onChange={(e) => setFilterCollection(e.target.value)}
-              className="flex h-9 w-full border border-border bg-background px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring brutal-shadow"
+              className="w-full bg-transparent border-b-2 border-border group-hover:border-background font-bold text-xl focus:outline-none uppercase cursor-pointer"
             >
-              <option value="ALL">All</option>
-              <option value="COLLECTED">Collected</option>
-              <option value="NOT_COLLECTED">Not Collected</option>
+              <option value="ALL">ALL</option>
+              <option value="COLLECTED">COLLECTED</option>
+              <option value="NOT_COLLECTED">UNCOLLECTED</option>
             </select>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto border-t-2 border-l-2 border-border">
         {loading && orders.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground font-mono">Loading orders...</div>
+          <div className="p-12 text-center text-4xl font-black uppercase tracking-widest border-r-2 border-b-2 border-border">Loading...</div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[120px]">Order ID</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Reg No</TableHead>
-                <TableHead>Digital ID</TableHead>
-                <TableHead>Size</TableHead>
-                <TableHead>Method</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredOrders.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    No orders found.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredOrders.map(o => (
-                  <TableRow key={o["Order ID"]}>
-                    <TableCell className="font-mono font-bold">{o["Order ID"]}</TableCell>
-                    <TableCell className="font-medium">{o["Name"]}</TableCell>
-                    <TableCell className="font-mono">{o["Register Number"]}</TableCell>
-                    <TableCell className="font-mono">{o["Digital ID"]}</TableCell>
-                    <TableCell className="font-bold">{o["T-Shirt Size"]}</TableCell>
-                    <TableCell className="font-mono">{o["Payment Method"]}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-1 items-start">
-                        {o["Payment Status"] === "PAID" ? 
-                          <Badge variant="success">PAID</Badge> : 
-                          <Badge variant="warning">PENDING</Badge>
-                        }
-                        {o["Collection Status"] === "COLLECTED" ? 
-                          <Badge variant="success">COLLECTED</Badge> : 
-                          <Badge variant="destructive">UNCOLLECTED</Badge>
-                        }
-                        {o["QR Sent"] ? 
-                          <Badge variant="default">QR SENT</Badge> : 
-                          <Badge variant="outline" className="bg-background">NO QR</Badge>
-                        }
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Link href={`/orders/${o["Order ID"]}`}>
-                        <Button size="sm" variant="outline" className="font-bold">VIEW</Button>
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+          <div className="grid grid-cols-1">
+            {filteredOrders.length === 0 ? (
+              <div className="p-12 text-center text-2xl font-bold uppercase tracking-widest text-muted-foreground border-r-2 border-b-2 border-border">
+                No orders found
+              </div>
+            ) : (
+              filteredOrders.map(o => (
+                <div key={o["Order ID"]} className="flex flex-col xl:flex-row border-r-2 border-b-2 border-border group hover:bg-foreground hover:text-background transition-colors duration-0">
+                  <div className="p-6 border-b-2 xl:border-b-0 xl:border-r-2 border-border group-hover:border-background w-full xl:w-48 flex-shrink-0 flex items-center">
+                    <span className="text-2xl font-black tracking-tighter">{o["Order ID"]}</span>
+                  </div>
+                  
+                  <div className="p-6 flex-1 flex flex-col justify-center xl:border-r-2 border-border group-hover:border-background border-b-2 xl:border-b-0">
+                    <p className="text-2xl font-black uppercase leading-none mb-2">{o["Name"]}</p>
+                    <div className="flex flex-wrap gap-4 text-xs font-bold tracking-[0.2em] uppercase text-muted-foreground group-hover:text-background">
+                      <span>{o["Register Number"]}</span>
+                      {o["Digital ID"] && <span>{o["Digital ID"]}</span>}
+                      <span>{o["Payment Method"]}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-6 border-b-2 xl:border-b-0 xl:border-r-2 border-border group-hover:border-background w-full xl:w-32 flex-shrink-0 flex flex-col items-center justify-center">
+                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] mb-2 group-hover:text-background">Size</span>
+                    <span className="text-4xl font-black">{o["T-Shirt Size"]}</span>
+                  </div>
+
+                  <div className="flex flex-row xl:flex-col w-full xl:w-40 flex-shrink-0 border-b-2 xl:border-b-0 xl:border-r-2 border-border group-hover:border-background">
+                    <div className={`flex-1 p-4 flex items-center justify-center border-r-2 xl:border-r-0 xl:border-b-2 border-border group-hover:border-background ${o["Payment Status"] === 'PAID' ? 'bg-success text-success-foreground' : 'bg-warning text-warning-foreground'}`}>
+                      <span className="text-[10px] font-black uppercase tracking-widest">{o["Payment Status"]}</span>
+                    </div>
+                    <div className={`flex-1 p-4 flex items-center justify-center border-r-2 xl:border-r-0 xl:border-b-2 border-border group-hover:border-background ${o["Collection Status"] === 'COLLECTED' ? 'bg-primary text-primary-foreground' : 'bg-background text-foreground'}`}>
+                      <span className="text-[10px] font-black uppercase tracking-widest">{o["Collection Status"] === 'COLLECTED' ? 'COLLECTED' : 'UNCOLLECTED'}</span>
+                    </div>
+                    <div className="flex-1 p-4 flex items-center justify-center bg-secondary text-secondary-foreground">
+                      <span className="text-[10px] font-black uppercase tracking-widest">{o["QR Sent"] ? 'QR SENT' : 'NO QR'}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-6 w-full xl:w-32 flex-shrink-0 flex items-center justify-center bg-background group-hover:bg-foreground">
+                    <Link href={`/orders/${o["Order ID"]}`} className="w-full">
+                      <button className="w-full py-4 border-2 border-foreground group-hover:border-background font-black uppercase tracking-widest text-xs hover:bg-foreground hover:text-background group-hover:hover:bg-background group-hover:hover:text-foreground transition-colors duration-0">
+                        VIEW
+                      </button>
+                    </Link>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         )}
       </div>
     </div>
