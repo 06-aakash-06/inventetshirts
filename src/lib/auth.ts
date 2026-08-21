@@ -1,66 +1,15 @@
-import { SignJWT, jwtVerify } from "jose";
-import { cookies } from "next/headers";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-options";
 
-const DEFAULT_SECRET = "default_fallback_session_secret_32_chars_long_invente_2026";
-const secretKey = process.env.SESSION_SECRET || DEFAULT_SECRET;
-const encodedKey = new TextEncoder().encode(secretKey);
-
-export async function encrypt(payload: any) {
-  return new SignJWT(payload)
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime("7d")
-    .sign(encodedKey);
-}
-
-export async function decrypt(session: string | undefined = "") {
+export async function getSession() {
+  const session = await getServerSession(authOptions);
   if (!session) return null;
-  try {
-    const { payload } = await jwtVerify(session, encodedKey, {
-      algorithms: ["HS256"],
-    });
-    return payload;
-  } catch (error) {
-    return null;
-  }
-}
-
-export async function createSession(user: { name: string; email: string; role: string }) {
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  const session = await encrypt({ user, expiresAt });
   
-  (await cookies()).set("session", session, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    expires: expiresAt,
-    sameSite: "lax",
-    path: "/",
-  });
-}
-
-export async function deleteSession() {
-  (await cookies()).delete("session");
-}
-
-export async function getSession(): Promise<{ user: { name: string; email: string; role: string }, expiresAt: string } | null> {
-  const session = (await cookies()).get("session")?.value;
-  const payload = await decrypt(session);
-  return payload as any;
-}
-
-export function getTeamUsers() {
-  try {
-    const jsonStr = process.env.TEAM_USERS_JSON;
-    if (jsonStr) {
-      return JSON.parse(jsonStr);
+  return {
+    user: {
+      name: session.user?.name || "User",
+      email: session.user?.email || "",
+      role: "admin" // All approved users are granted admin access
     }
-  } catch (e) {
-    console.error("Failed to parse TEAM_USERS_JSON", e);
-  }
-  
-  // Default fallback team users so login works out of the box on Vercel
-  return [
-    { email: "aakash@ssn.edu.in", name: "Aakash", password: "password123", role: "admin" },
-    { email: "rahul@ssn.edu.in", name: "Rahul", password: "password123", role: "logistics" }
-  ];
+  };
 }
