@@ -50,43 +50,43 @@
   --radius-sm: calc(var(--radius) - 4px);
 }
 
-/* Vibrant Dark Neo-Brutalism */
+/* Swiss Bauhaus Typography & Design */
 :root {
-  --background: #09090b; /* Pure dark zinc */
-  --foreground: #fafafa; /* Crisp white */
+  --background: #000000; /* Pure Black */
+  --foreground: #FFFFFF; /* Pure White */
 
-  --card: #18181b; /* Elevated dark zinc */
-  --card-foreground: #fafafa;
+  --card: #0A0A0A; /* Slightly off-black for subtle hierarchy */
+  --card-foreground: #FFFFFF;
 
-  --popover: #18181b;
-  --popover-foreground: #fafafa;
+  --popover: #0A0A0A;
+  --popover-foreground: #FFFFFF;
 
-  --primary: #fbbf24; /* Cyber Yellow */
-  --primary-foreground: #09090b; /* Black text on yellow for brutal contrast */
+  --primary: #FF3333; /* Bauhaus Red */
+  --primary-foreground: #000000; 
 
-  --secondary: #a855f7; /* Electric Purple */
-  --secondary-foreground: #fafafa;
+  --secondary: #0055FF; /* Swiss Blue */
+  --secondary-foreground: #FFFFFF;
 
-  --muted: #27272a;
-  --muted-foreground: #a1a1aa;
+  --muted: #111111;
+  --muted-foreground: #888888;
 
-  --accent: #22d3ee; /* Cyan */
-  --accent-foreground: #09090b;
+  --accent: #FFFFFF; /* White block accents */
+  --accent-foreground: #000000;
 
-  --destructive: #ef4444; /* Vivid Red */
-  --destructive-foreground: #fafafa;
+  --destructive: #FF0000; /* Pure Red */
+  --destructive-foreground: #FFFFFF;
   
-  --success: #22c55e; /* Vivid Green */
-  --success-foreground: #09090b; /* Black text on bright green */
+  --success: #00C853; /* Pure Green */
+  --success-foreground: #000000; 
   
-  --warning: #f97316; /* Bright Orange */
-  --warning-foreground: #09090b;
+  --warning: #FFD600; /* Pure Yellow */
+  --warning-foreground: #000000;
 
-  --border: #3f3f46; /* Distinct gray for borders */
-  --input: #27272a;
-  --ring: #fbbf24;
+  --border: #333333; /* Sharp structural grid lines */
+  --input: #111111;
+  --ring: #FF3333;
 
-  --radius: 0rem; /* Sharp corners for brutalism */
+  --radius: 0rem; /* Strictly no border radius */
 }
 
 @layer base {
@@ -96,27 +96,41 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+    /* Clean font rendering for Swiss style */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  /* Swiss Typographic Hierarchy */
+  h1, h2, h3 {
+    letter-spacing: -0.05em; /* Extremely tight headers */
+    line-height: 0.9;
+  }
+  label, .tracking-widest {
+    letter-spacing: 0.15em !important; /* Extremely tracked out small caps */
   }
 }
 
-/* Custom Neo-Brutalist styling primitives */
+/* Swiss/Bauhaus structural primitives */
 @layer utilities {
   .brutal-shadow {
-    /* Hard vibrant shadow */
-    box-shadow: 4px 4px 0px 0px var(--primary);
+    /* Remove blocky shadow, enforce sharp grid borders */
+    box-shadow: none;
     border: 1px solid var(--border);
+    transition: background-color 0s, color 0s, border-color 0s;
   }
   .brutal-shadow-hover {
-    transition: box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: background-color 0s, color 0s, border-color 0s;
   }
   .brutal-shadow-hover:hover {
-    /* Shadow expands and changes color slightly, or element lifts */
-    box-shadow: 6px 6px 0px 0px var(--accent);
-    transform: translate(-2px, -2px);
-    border-color: var(--accent);
+    /* Stark color inversion instead of 3D lift */
+    background-color: var(--foreground);
+    color: var(--background);
+    border-color: var(--foreground);
   }
   .brutal-shadow-hover:active {
-    box-shadow: 0px 0px 0px 0px var(--accent);
-    transform: translate(4px, 4px);
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+    border-color: var(--primary);
   }
 }
