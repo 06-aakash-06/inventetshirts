@@ -89,157 +89,139 @@ export default function DashboardClient({ isAdmin }: { isAdmin?: boolean }) {
   const recentActivities = activities.slice(0, 10);
 
   return (
-    <div className="p-4 sm:p-8 space-y-8 container mx-auto">
-      <div className="flex justify-between items-end">
-        <h1 className="text-3xl font-bold tracking-tighter">Dashboard</h1>
-        <span className="text-xs font-mono text-muted-foreground border-b border-border/50">
-          Last synced: {lastSynced.toLocaleTimeString()}
+    <div className="p-4 sm:p-8 space-y-0 container mx-auto">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-2 border-border pb-4 mb-12">
+        <h1 className="text-5xl sm:text-7xl md:text-8xl font-black tracking-tighter uppercase leading-none">Dashboard</h1>
+        <span className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] mt-4 sm:mt-0">
+          SYNC / {lastSynced.toLocaleTimeString()}
         </span>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Total Orders</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-black">{totalOrders}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Pending Payments</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-black text-warning">{totalOrders - paidOrders.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Paid Orders</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-black text-success">{paidOrders.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Collected</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-black text-primary">{collectedOrders.length}</div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-0 border-t-2 border-l-2 border-border mb-12">
+        <div className="p-6 md:p-8 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[250px] bg-background text-foreground hover:bg-foreground hover:text-background transition-colors duration-0 group cursor-default">
+          <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground group-hover:text-background">Total Orders</h2>
+          <div className="text-[5rem] sm:text-[6rem] md:text-[7rem] leading-none font-black tracking-tighter">{totalOrders}</div>
+        </div>
+        <div className="p-6 md:p-8 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[250px] bg-warning text-warning-foreground hover:bg-foreground hover:text-background transition-colors duration-0 cursor-default">
+          <h2 className="text-xs font-bold uppercase tracking-[0.2em]">Pending</h2>
+          <div className="text-[5rem] sm:text-[6rem] md:text-[7rem] leading-none font-black tracking-tighter">{totalOrders - paidOrders.length}</div>
+        </div>
+        <div className="p-6 md:p-8 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[250px] bg-success text-success-foreground hover:bg-foreground hover:text-background transition-colors duration-0 cursor-default">
+          <h2 className="text-xs font-bold uppercase tracking-[0.2em]">Paid</h2>
+          <div className="text-[5rem] sm:text-[6rem] md:text-[7rem] leading-none font-black tracking-tighter">{paidOrders.length}</div>
+        </div>
+        <div className="p-6 md:p-8 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[250px] bg-primary text-primary-foreground hover:bg-foreground hover:text-background transition-colors duration-0 cursor-default">
+          <h2 className="text-xs font-bold uppercase tracking-[0.2em]">Collected</h2>
+          <div className="text-[5rem] sm:text-[6rem] md:text-[7rem] leading-none font-black tracking-tighter">{collectedOrders.length}</div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="uppercase tracking-widest text-sm text-muted-foreground">Revenue</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between items-center border-b border-border/50 pb-2">
-              <span className="font-bold">Expected</span>
-              <span className="font-mono text-lg font-bold">₹{expectedRevenue}</span>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 border-t-2 border-l-2 border-border mb-12">
+        <div className="p-6 md:p-8 border-r-2 border-b-2 border-border flex flex-col justify-between bg-background text-foreground hover:bg-foreground hover:text-background transition-colors duration-0 group cursor-default">
+          <h2 className="text-xs font-bold uppercase tracking-[0.2em] mb-12 text-muted-foreground group-hover:text-background">Revenue</h2>
+          <div className="space-y-6">
+            <div className="flex justify-between items-end border-b-2 border-border pb-2 group-hover:border-background">
+              <span className="font-black text-xl uppercase tracking-widest">Expected</span>
+              <span className="text-4xl md:text-5xl font-black tracking-tighter">₹{expectedRevenue}</span>
             </div>
-            <div className="flex justify-between items-center border-b border-border/50 pb-2">
-              <span className="font-bold">Received</span>
-              <span className="font-mono text-lg font-bold text-success">₹{receivedRevenue}</span>
+            <div className="flex justify-between items-end border-b-2 border-border pb-2 group-hover:border-background">
+              <span className="font-black text-xl uppercase tracking-widest">Received</span>
+              <span className="text-4xl md:text-5xl font-black tracking-tighter">₹{receivedRevenue}</span>
             </div>
-            <div className="flex justify-between items-center text-sm pt-2 font-mono text-muted-foreground">
-              <span>UPI: {upiOrders.length}</span>
-              <span>Cash: {cashOrders.length}</span>
+            <div className="flex justify-between items-center pt-4 font-bold uppercase tracking-[0.2em] text-xs">
+              <span>UPI / {upiOrders.length}</span>
+              <span>CASH / {cashOrders.length}</span>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="uppercase tracking-widest text-sm text-muted-foreground">Size Breakdown</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-3 gap-2">
-              {Object.entries(sizes).map(([size, count]) => (
-                <div key={size} className="flex flex-col items-center justify-center bg-muted p-2 brutal-shadow">
-                  <span className="text-xs font-bold text-muted-foreground">{size}</span>
-                  <span className="text-xl font-bold">{count}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <div className="p-6 md:p-8 border-r-2 border-b-2 border-border flex flex-col justify-between bg-background text-foreground hover:bg-foreground hover:text-background transition-colors duration-0 group cursor-default">
+          <h2 className="text-xs font-bold uppercase tracking-[0.2em] mb-8 text-muted-foreground group-hover:text-background">Size Breakdown</h2>
+          <div className="grid grid-cols-3 gap-0 border-t-2 border-l-2 border-border group-hover:border-background">
+            {Object.entries(sizes).map(([size, count]) => (
+              <div key={size} className="flex flex-col items-center justify-center p-4 sm:p-6 border-r-2 border-b-2 border-border group-hover:border-background group-hover:text-background transition-colors duration-0">
+                <span className="text-4xl sm:text-5xl font-black tracking-tighter mb-2">{count}</span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em]">{size}</span>
+              </div>
+            ))}
+            {Object.keys(sizes).length === 0 && (
+              <div className="col-span-3 p-8 text-center font-bold tracking-widest uppercase text-sm border-r-2 border-b-2 border-border group-hover:border-background">
+                No Data
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {isAdmin && (
-        <Card className="border-2 border-primary">
-          <CardHeader>
-            <CardTitle className="uppercase tracking-widest text-sm text-primary font-bold">Ticketing Operations</CardTitle>
-            <CardDescription className="font-mono text-xs">
-              Batch send QR code tickets to students who have paid but haven't received their ticket yet.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-            <div>
-              <p className="text-2xl font-black">{eligibleForQr.length}</p>
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Eligible Students</p>
+        <div className="border-2 border-border bg-secondary text-secondary-foreground flex flex-col lg:flex-row mb-12 hover:bg-foreground hover:text-background transition-colors duration-0 group">
+          <div className="p-6 md:p-8 border-b-2 lg:border-b-0 lg:border-r-2 border-border flex-1 group-hover:border-background">
+            <h2 className="text-5xl sm:text-7xl font-black tracking-tighter leading-none mb-4 uppercase">Tickets</h2>
+            <p className="text-sm font-bold uppercase tracking-[0.2em]">Batch Send QR Codes</p>
+          </div>
+          <div className="p-6 md:p-8 flex flex-col justify-center min-w-[300px] lg:min-w-[400px]">
+            <div className="flex justify-between items-end mb-6">
+              <span className="text-xs font-bold uppercase tracking-[0.2em]">Eligible</span>
+              <span className="text-5xl font-black tracking-tighter leading-none">{eligibleForQr.length}</span>
             </div>
-            
-            <div className="flex-1 max-w-sm w-full">
-              {sendingQRs ? (
-                <div className="space-y-2">
-                  <div className="flex justify-between text-xs font-mono font-bold">
-                    <span>Sending...</span>
-                    <span>{qrProgress?.sent} sent / {qrProgress?.remaining} remaining</span>
-                  </div>
-                  <div className="w-full bg-muted h-2 border border-border">
-                    <div 
-                      className="bg-primary h-full transition-all" 
-                      style={{ width: `${Math.min(100, Math.max(0, ((qrProgress?.sent || 0) / ((qrProgress?.sent || 0) + (qrProgress?.remaining || 1))) * 100))}%` }} 
-                    />
-                  </div>
+            {sendingQRs ? (
+              <div className="space-y-4">
+                <div className="flex justify-between text-xs font-bold tracking-[0.2em] uppercase">
+                  <span>Sending</span>
+                  <span>{qrProgress?.sent} / {qrProgress?.remaining}</span>
                 </div>
-              ) : (
-                <Button 
-                  className="w-full font-black tracking-widest h-12 brutal-shadow" 
-                  disabled={eligibleForQr.length === 0}
-                  onClick={handleSendTickets}
-                >
-                  SEND QR TICKETS
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="uppercase tracking-widest text-sm text-muted-foreground">Recent Activity</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {recentActivities.length === 0 ? (
-              <div className="text-sm text-muted-foreground font-mono">No recent activity.</div>
+                <div className="w-full h-4 border-2 border-secondary-foreground group-hover:border-background p-0.5">
+                  <div 
+                    className="bg-secondary-foreground group-hover:bg-background h-full transition-all" 
+                    style={{ width: `${Math.min(100, Math.max(0, ((qrProgress?.sent || 0) / ((qrProgress?.sent || 0) + (qrProgress?.remaining || 1))) * 100))}%` }} 
+                  />
+                </div>
+              </div>
             ) : (
-              recentActivities.map((act) => (
-                <div key={act.id} className="flex items-start justify-between border-b border-border/50 pb-4 last:border-0 last:pb-0">
-                  <div className="space-y-1">
-                    <p className="text-sm">
-                      <span className="font-bold">{act.user}</span> {act.description}
-                    </p>
-                    <p className="text-xs text-muted-foreground font-mono">
-                      {act.timestamp.toLocaleString()}
-                    </p>
-                  </div>
-                  <Badge variant={act.type === 'payment' ? 'success' : 'default'}>
-                    {act.type.toUpperCase()}
-                  </Badge>
-                </div>
-              ))
+              <button 
+                className="w-full font-black tracking-[0.2em] uppercase h-16 border-2 border-secondary-foreground group-hover:border-background disabled:opacity-50 hover:bg-secondary-foreground hover:text-secondary group-hover:hover:bg-background group-hover:hover:text-foreground transition-colors duration-0" 
+                disabled={eligibleForQr.length === 0}
+                onClick={handleSendTickets}
+              >
+                Send QR Tickets
+              </button>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
+
+      <div className="border-t-2 border-l-2 border-border">
+        <div className="p-4 sm:p-6 border-r-2 border-b-2 border-border bg-background">
+          <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">Activity Feed</h2>
+        </div>
+        <div className="grid grid-cols-1">
+          {recentActivities.length === 0 ? (
+            <div className="p-8 border-r-2 border-b-2 border-border text-sm font-bold uppercase tracking-widest text-center">
+              No activity
+            </div>
+          ) : (
+            recentActivities.map((act, index) => (
+              <div key={act.id} className="flex flex-col sm:flex-row border-r-2 border-b-2 border-border hover:bg-foreground hover:text-background transition-colors duration-0 group">
+                <div className="p-4 sm:p-6 border-b-2 sm:border-b-0 sm:border-r-2 border-border group-hover:border-background w-full sm:w-48 flex-shrink-0 flex items-center">
+                  <span className={`text-xs font-bold tracking-[0.2em] uppercase ${act.type === 'payment' ? 'text-success group-hover:text-background' : 'text-primary group-hover:text-background'}`}>
+                    {act.type}
+                  </span>
+                </div>
+                <div className="p-4 sm:p-6 flex-1 flex flex-col justify-center">
+                  <p className="text-sm font-bold tracking-wide uppercase">
+                    <span className="font-black">{act.user}</span> {act.description}
+                  </p>
+                </div>
+                <div className="p-4 sm:p-6 sm:border-l-2 border-border group-hover:border-background w-full sm:w-48 flex-shrink-0 flex items-center justify-start sm:justify-end">
+                  <span className="text-[10px] font-bold tracking-[0.1em] uppercase text-muted-foreground group-hover:text-background">
+                    {act.timestamp.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }
