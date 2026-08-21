@@ -18,6 +18,7 @@ export interface Order {
   "Collector": string;
   "Collected At": string;
   "Notes": string;
+  "QR Sent": boolean;
 }
 
 const API_URL = "/api/orders";
@@ -56,6 +57,7 @@ export async function getOrders(): Promise<Order[]> {
       "Payment Method": (order["Payment Method - Rs. 300"] || order["Payment Method"] || "").toString().toUpperCase().includes("UPI") ? "UPI" : "CASH",
       "Payment Screenshot": order["Payment UPI (Upload screenshot if payment done through UPI)"] || order["Payment Screenshot"] || "",
       "College Email": order["College Email ID"] || order["Email Address"] || order["College Email"] || "",
+      "QR Sent": order["QR Sent"] === true || order["QR Sent"] === "TRUE",
     }));
 
     return normalizedData;
@@ -100,4 +102,20 @@ export async function updateNotes(orderId: string, notes: string) {
       notes
     })
   });
+}
+
+export async function sendQrTicketsBatch() {
+  const response = await fetch("/api/orders/send-qr-tickets", {
+    method: "POST",
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    if (response.status === 403) throw new Error("Forbidden: Admin access required.");
+    throw new Error("Failed to send QR tickets.");
+  }
+  const data = await response.json();
+  if (!data.success) {
+    throw new Error(data.error || "Failed to send QR tickets.");
+  }
+  return data;
 }

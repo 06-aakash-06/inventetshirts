@@ -118,6 +118,10 @@ export default function OrdersPage() {
                           <Badge variant="success">COLLECTED</Badge> : 
                           <Badge variant="destructive">UNCOLLECTED</Badge>
                         }
+                        {o["QR Sent"] ? 
+                          <Badge variant="default">QR SENT</Badge> : 
+                          <Badge variant="outline" className="bg-background">NO QR</Badge>
+                        }
                       </div>
                     </TableCell>
                     <TableCell className="text-right">

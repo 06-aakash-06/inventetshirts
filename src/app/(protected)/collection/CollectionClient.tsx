@@ -1,5 +1,6 @@
 "use client"
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { Html5Qrcode } from "html5-qrcode";
 import { useOrders } from "@/context/OrdersContext";
 import { updateCollection } from "@/lib/api";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,40 @@ export default function CollectionClient({ userName }: { userName: string }) {
   const { orders, setOrders } = useOrders();
   const [search, setSearch] = useState("");
   const [updating, setUpdating] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+
+  useEffect(() => {
+    if (isScanning) {
+      const html5QrCode = new Html5Qrcode("qr-reader");
+      scannerRef.current = html5QrCode;
+      
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+          // Success! Stop scanner and set search
+          html5QrCode.stop().then(() => {
+            setIsScanning(false);
+            setSearch(decodedText);
+          }).catch(console.error);
+        },
+        () => {
+          // ignore parse errors frame-by-frame
+        }
+      ).catch(err => {
+        console.error("Scanner error:", err);
+        alert("Failed to start scanner. Please check camera permissions and ensure you are on HTTPS.");
+        setIsScanning(false);
+      });
+      
+      return () => {
+        if (html5QrCode.isScanning) {
+          html5QrCode.stop().catch(console.error);
+        }
+      };
+    }
+  }, [isScanning]);
 
   const searchTrimmed = search.trim().toLowerCase();
   const matchedOrder = searchTrimmed.length >= 3 
@@ -45,15 +80,32 @@ export default function CollectionClient({ userName }: { userName: string }) {
     <div className="p-4 space-y-6 container mx-auto max-w-lg flex flex-col items-center">
       <h1 className="text-3xl font-black tracking-widest text-center w-full mt-4 text-primary">DISTRIBUTION</h1>
       
-      <div className="w-full">
+      <div className="w-full flex gap-2">
         <Input 
           autoFocus
-          className="text-lg py-8 font-mono text-center brutal-shadow focus-visible:translate-x-[4px] focus-visible:translate-y-[4px] border-2"
+          className="flex-1 text-lg py-8 font-mono text-center brutal-shadow focus-visible:translate-x-[4px] focus-visible:translate-y-[4px] border-2"
           placeholder="Scan ID / Reg No / Name..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+        <Button 
+          variant="default"
+          className="h-auto px-6 py-8 font-black tracking-widest text-lg brutal-shadow border-2"
+          onClick={() => setIsScanning(true)}
+          disabled={isScanning}
+        >
+          SCAN QR
+        </Button>
       </div>
+
+      {isScanning && (
+        <div className="w-full relative brutal-shadow border-2 bg-black overflow-hidden flex flex-col items-center justify-center p-4">
+          <div id="qr-reader" className="w-full max-w-sm h-[300px] sm:h-[400px] mb-4 bg-background"></div>
+          <Button variant="destructive" className="w-full font-bold uppercase tracking-widest absolute bottom-4 max-w-xs z-10" onClick={() => setIsScanning(false)}>
+            CANCEL SCAN
+          </Button>
+        </div>
+      )}
 
       {search.length >= 3 && !matchedOrder && (
         <div className="text-muted-foreground font-mono mt-8 border border-destructive/50 bg-destructive/10 p-4 text-destructive w-full text-center brutal-shadow">
