@@ -98,54 +98,54 @@ export default function DashboardClient({ isAdmin }: { isAdmin?: boolean }) {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-0 border-t-2 border-l-2 border-border mb-12">
-        <div className="p-6 md:p-8 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[250px] bg-background text-foreground hover:bg-foreground hover:text-background transition-colors duration-0 group cursor-default">
-          <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground group-hover:text-background">Total Orders</h2>
-          <div className="text-[5rem] sm:text-[6rem] md:text-[7rem] leading-none font-black tracking-tighter">{totalOrders}</div>
+        <div className="p-4 sm:p-6 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[180px] bg-background text-foreground">
+          <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">Total Orders</h2>
+          <div className="text-5xl sm:text-6xl leading-none font-black tracking-tighter">{totalOrders}</div>
         </div>
-        <div className="p-6 md:p-8 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[250px] bg-warning text-warning-foreground hover:bg-foreground hover:text-background transition-colors duration-0 cursor-default">
+        <div className="p-4 sm:p-6 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[180px] bg-warning text-warning-foreground">
           <h2 className="text-xs font-bold uppercase tracking-[0.2em]">Pending</h2>
-          <div className="text-[5rem] sm:text-[6rem] md:text-[7rem] leading-none font-black tracking-tighter">{totalOrders - paidOrders.length}</div>
+          <div className="text-5xl sm:text-6xl leading-none font-black tracking-tighter">{totalOrders - paidOrders.length}</div>
         </div>
-        <div className="p-6 md:p-8 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[250px] bg-success text-success-foreground hover:bg-foreground hover:text-background transition-colors duration-0 cursor-default">
+        <div className="p-4 sm:p-6 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[180px] bg-success text-success-foreground">
           <h2 className="text-xs font-bold uppercase tracking-[0.2em]">Paid</h2>
-          <div className="text-[5rem] sm:text-[6rem] md:text-[7rem] leading-none font-black tracking-tighter">{paidOrders.length}</div>
+          <div className="text-5xl sm:text-6xl leading-none font-black tracking-tighter">{paidOrders.length}</div>
         </div>
-        <div className="p-6 md:p-8 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[250px] bg-primary text-primary-foreground hover:bg-foreground hover:text-background transition-colors duration-0 cursor-default">
+        <div className="p-4 sm:p-6 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[180px] bg-primary text-primary-foreground">
           <h2 className="text-xs font-bold uppercase tracking-[0.2em]">Collected</h2>
-          <div className="text-[5rem] sm:text-[6rem] md:text-[7rem] leading-none font-black tracking-tighter">{collectedOrders.length}</div>
+          <div className="text-5xl sm:text-6xl leading-none font-black tracking-tighter">{collectedOrders.length}</div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 border-t-2 border-l-2 border-border mb-12">
-        <div className="p-6 md:p-8 border-r-2 border-b-2 border-border flex flex-col justify-between bg-background text-foreground hover:bg-foreground hover:text-background transition-colors duration-0 group cursor-default">
-          <h2 className="text-xs font-bold uppercase tracking-[0.2em] mb-12 text-muted-foreground group-hover:text-background">Revenue</h2>
-          <div className="space-y-6">
-            <div className="flex justify-between items-end border-b-2 border-border pb-2 group-hover:border-background">
-              <span className="font-black text-xl uppercase tracking-widest">Expected</span>
-              <span className="text-4xl md:text-5xl font-black tracking-tighter">₹{expectedRevenue}</span>
+        <div className="p-4 sm:p-6 border-r-2 border-b-2 border-border flex flex-col justify-between bg-background text-foreground">
+          <h2 className="text-xs font-bold uppercase tracking-[0.2em] mb-8 text-muted-foreground">Revenue</h2>
+          <div className="space-y-4">
+            <div className="flex justify-between items-end border-b-2 border-border pb-2">
+              <span className="font-bold text-sm uppercase tracking-widest text-muted-foreground">Expected</span>
+              <span className="text-3xl sm:text-4xl font-black tracking-tighter">₹{expectedRevenue}</span>
             </div>
-            <div className="flex justify-between items-end border-b-2 border-border pb-2 group-hover:border-background">
-              <span className="font-black text-xl uppercase tracking-widest">Received</span>
-              <span className="text-4xl md:text-5xl font-black tracking-tighter">₹{receivedRevenue}</span>
+            <div className="flex justify-between items-end border-b-2 border-border pb-2">
+              <span className="font-bold text-sm uppercase tracking-widest text-muted-foreground">Received</span>
+              <span className="text-3xl sm:text-4xl font-black tracking-tighter text-success">₹{receivedRevenue}</span>
             </div>
-            <div className="flex justify-between items-center pt-4 font-bold uppercase tracking-[0.2em] text-xs">
+            <div className="flex justify-between items-center pt-2 font-bold uppercase tracking-[0.2em] text-xs text-muted-foreground">
               <span>UPI / {upiOrders.length}</span>
               <span>CASH / {cashOrders.length}</span>
             </div>
           </div>
         </div>
 
-        <div className="p-6 md:p-8 border-r-2 border-b-2 border-border flex flex-col justify-between bg-background text-foreground hover:bg-foreground hover:text-background transition-colors duration-0 group cursor-default">
-          <h2 className="text-xs font-bold uppercase tracking-[0.2em] mb-8 text-muted-foreground group-hover:text-background">Size Breakdown</h2>
-          <div className="grid grid-cols-3 gap-0 border-t-2 border-l-2 border-border group-hover:border-background">
+        <div className="p-4 sm:p-6 border-r-2 border-b-2 border-border flex flex-col justify-between bg-background text-foreground">
+          <h2 className="text-xs font-bold uppercase tracking-[0.2em] mb-6 text-muted-foreground">Size Breakdown</h2>
+          <div className="grid grid-cols-3 gap-0 border-t-2 border-l-2 border-border">
             {Object.entries(sizes).map(([size, count]) => (
-              <div key={size} className="flex flex-col items-center justify-center p-4 sm:p-6 border-r-2 border-b-2 border-border group-hover:border-background group-hover:text-background transition-colors duration-0">
-                <span className="text-4xl sm:text-5xl font-black tracking-tighter mb-2">{count}</span>
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em]">{size}</span>
+              <div key={size} className="flex flex-col items-center justify-center p-3 sm:p-4 border-r-2 border-b-2 border-border">
+                <span className="text-3xl sm:text-4xl font-black tracking-tighter mb-1">{count}</span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">{size}</span>
               </div>
             ))}
             {Object.keys(sizes).length === 0 && (
-              <div className="col-span-3 p-8 text-center font-bold tracking-widest uppercase text-sm border-r-2 border-b-2 border-border group-hover:border-background">
+              <div className="col-span-3 p-8 text-center font-bold tracking-widest uppercase text-sm border-r-2 border-b-2 border-border">
                 No Data
               </div>
             )}
@@ -154,32 +154,32 @@ export default function DashboardClient({ isAdmin }: { isAdmin?: boolean }) {
       </div>
 
       {isAdmin && (
-        <div className="border-2 border-border bg-secondary text-secondary-foreground flex flex-col lg:flex-row mb-12 hover:bg-foreground hover:text-background transition-colors duration-0 group">
-          <div className="p-6 md:p-8 border-b-2 lg:border-b-0 lg:border-r-2 border-border flex-1 group-hover:border-background">
-            <h2 className="text-5xl sm:text-7xl font-black tracking-tighter leading-none mb-4 uppercase">Tickets</h2>
-            <p className="text-sm font-bold uppercase tracking-[0.2em]">Batch Send QR Codes</p>
+        <div className="border-2 border-border bg-secondary text-secondary-foreground flex flex-col lg:flex-row mb-12">
+          <div className="p-4 sm:p-6 border-b-2 lg:border-b-0 lg:border-r-2 border-border flex-1">
+            <h2 className="text-4xl sm:text-5xl font-black tracking-tighter leading-none mb-2 uppercase">Tickets</h2>
+            <p className="text-xs font-bold uppercase tracking-[0.2em]">Batch Send QR Codes</p>
           </div>
-          <div className="p-6 md:p-8 flex flex-col justify-center min-w-[300px] lg:min-w-[400px]">
-            <div className="flex justify-between items-end mb-6">
+          <div className="p-4 sm:p-6 flex flex-col justify-center min-w-[300px] lg:min-w-[400px]">
+            <div className="flex justify-between items-end mb-4">
               <span className="text-xs font-bold uppercase tracking-[0.2em]">Eligible</span>
-              <span className="text-5xl font-black tracking-tighter leading-none">{eligibleForQr.length}</span>
+              <span className="text-4xl font-black tracking-tighter leading-none">{eligibleForQr.length}</span>
             </div>
             {sendingQRs ? (
-              <div className="space-y-4">
-                <div className="flex justify-between text-xs font-bold tracking-[0.2em] uppercase">
+              <div className="space-y-2">
+                <div className="flex justify-between text-[10px] font-bold tracking-[0.2em] uppercase">
                   <span>Sending</span>
                   <span>{qrProgress?.sent} / {qrProgress?.remaining}</span>
                 </div>
-                <div className="w-full h-4 border-2 border-secondary-foreground group-hover:border-background p-0.5">
+                <div className="w-full h-3 border-2 border-secondary-foreground p-0.5">
                   <div 
-                    className="bg-secondary-foreground group-hover:bg-background h-full transition-all" 
+                    className="bg-secondary-foreground h-full transition-all" 
                     style={{ width: `${Math.min(100, Math.max(0, ((qrProgress?.sent || 0) / ((qrProgress?.sent || 0) + (qrProgress?.remaining || 1))) * 100))}%` }} 
                   />
                 </div>
               </div>
             ) : (
               <button 
-                className="w-full font-black tracking-[0.2em] uppercase h-16 border-2 border-secondary-foreground group-hover:border-background disabled:opacity-50 hover:bg-secondary-foreground hover:text-secondary group-hover:hover:bg-background group-hover:hover:text-foreground transition-colors duration-0" 
+                className="w-full font-black tracking-[0.2em] uppercase h-12 border-2 border-secondary-foreground disabled:opacity-50 hover:bg-secondary-foreground hover:text-secondary transition-colors duration-0" 
                 disabled={eligibleForQr.length === 0}
                 onClick={handleSendTickets}
               >
@@ -191,29 +191,29 @@ export default function DashboardClient({ isAdmin }: { isAdmin?: boolean }) {
       )}
 
       <div className="border-t-2 border-l-2 border-border">
-        <div className="p-4 sm:p-6 border-r-2 border-b-2 border-border bg-background">
+        <div className="p-3 sm:p-4 border-r-2 border-b-2 border-border bg-background">
           <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">Activity Feed</h2>
         </div>
         <div className="grid grid-cols-1">
           {recentActivities.length === 0 ? (
-            <div className="p-8 border-r-2 border-b-2 border-border text-sm font-bold uppercase tracking-widest text-center">
+            <div className="p-6 border-r-2 border-b-2 border-border text-xs font-bold uppercase tracking-widest text-center">
               No activity
             </div>
           ) : (
             recentActivities.map((act, index) => (
-              <div key={act.id} className="flex flex-col sm:flex-row border-r-2 border-b-2 border-border hover:bg-foreground hover:text-background transition-colors duration-0 group">
-                <div className="p-4 sm:p-6 border-b-2 sm:border-b-0 sm:border-r-2 border-border group-hover:border-background w-full sm:w-48 flex-shrink-0 flex items-center">
-                  <span className={`text-xs font-bold tracking-[0.2em] uppercase ${act.type === 'payment' ? 'text-success group-hover:text-background' : 'text-primary group-hover:text-background'}`}>
+              <div key={act.id} className="flex flex-col sm:flex-row border-r-2 border-b-2 border-border hover:bg-muted transition-colors duration-0">
+                <div className="p-3 sm:p-4 border-b-2 sm:border-b-0 sm:border-r-2 border-border w-full sm:w-48 flex-shrink-0 flex items-center">
+                  <span className={`text-[10px] font-bold tracking-[0.2em] uppercase ${act.type === 'payment' ? 'text-success' : 'text-primary'}`}>
                     {act.type}
                   </span>
                 </div>
-                <div className="p-4 sm:p-6 flex-1 flex flex-col justify-center">
+                <div className="p-3 sm:p-4 flex-1 flex flex-col justify-center">
                   <p className="text-sm font-bold tracking-wide uppercase">
                     <span className="font-black">{act.user}</span> {act.description}
                   </p>
                 </div>
-                <div className="p-4 sm:p-6 sm:border-l-2 border-border group-hover:border-background w-full sm:w-48 flex-shrink-0 flex items-center justify-start sm:justify-end">
-                  <span className="text-[10px] font-bold tracking-[0.1em] uppercase text-muted-foreground group-hover:text-background">
+                <div className="p-3 sm:p-4 sm:border-l-2 border-border w-full sm:w-48 flex-shrink-0 flex items-center justify-start sm:justify-end">
+                  <span className="text-[10px] font-bold tracking-[0.1em] uppercase text-muted-foreground">
                     {act.timestamp.toLocaleString()}
                   </span>
                 </div>

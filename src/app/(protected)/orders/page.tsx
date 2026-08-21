@@ -80,49 +80,49 @@ export default function OrdersPage() {
 
       <div className="flex-1 overflow-auto border-t-2 border-l-2 border-border">
         {loading && orders.length === 0 ? (
-          <div className="p-12 text-center text-4xl font-black uppercase tracking-widest border-r-2 border-b-2 border-border">Loading...</div>
+          <div className="p-8 text-center text-2xl font-black uppercase tracking-widest border-r-2 border-b-2 border-border">Loading...</div>
         ) : (
           <div className="grid grid-cols-1">
             {filteredOrders.length === 0 ? (
-              <div className="p-12 text-center text-2xl font-bold uppercase tracking-widest text-muted-foreground border-r-2 border-b-2 border-border">
+              <div className="p-8 text-center text-xl font-bold uppercase tracking-widest text-muted-foreground border-r-2 border-b-2 border-border">
                 No orders found
               </div>
             ) : (
               filteredOrders.map(o => (
-                <div key={o["Order ID"]} className="flex flex-col xl:flex-row border-r-2 border-b-2 border-border group hover:bg-foreground hover:text-background transition-colors duration-0">
-                  <div className="p-6 border-b-2 xl:border-b-0 xl:border-r-2 border-border group-hover:border-background w-full xl:w-48 flex-shrink-0 flex items-center">
-                    <span className="text-2xl font-black tracking-tighter">{o["Order ID"]}</span>
+                <div key={o["Order ID"]} className="flex flex-col xl:flex-row border-r-2 border-b-2 border-border hover:bg-muted transition-colors duration-0">
+                  <div className="p-4 border-b-2 xl:border-b-0 xl:border-r-2 border-border w-full xl:w-48 flex-shrink-0 flex items-center">
+                    <span className="text-xl font-black tracking-tighter">{o["Order ID"]}</span>
                   </div>
                   
-                  <div className="p-6 flex-1 flex flex-col justify-center xl:border-r-2 border-border group-hover:border-background border-b-2 xl:border-b-0">
-                    <p className="text-2xl font-black uppercase leading-none mb-2">{o["Name"]}</p>
-                    <div className="flex flex-wrap gap-4 text-xs font-bold tracking-[0.2em] uppercase text-muted-foreground group-hover:text-background">
+                  <div className="p-4 flex-1 flex flex-col justify-center xl:border-r-2 border-border border-b-2 xl:border-b-0">
+                    <p className="text-xl font-black uppercase leading-none mb-1">{o["Name"]}</p>
+                    <div className="flex flex-wrap gap-4 text-[10px] font-bold tracking-[0.2em] uppercase text-muted-foreground">
                       <span>{o["Register Number"]}</span>
                       {o["Digital ID"] && <span>{o["Digital ID"]}</span>}
                       <span>{o["Payment Method"]}</span>
                     </div>
                   </div>
 
-                  <div className="p-6 border-b-2 xl:border-b-0 xl:border-r-2 border-border group-hover:border-background w-full xl:w-32 flex-shrink-0 flex flex-col items-center justify-center">
-                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] mb-2 group-hover:text-background">Size</span>
-                    <span className="text-4xl font-black">{o["T-Shirt Size"]}</span>
+                  <div className="p-4 border-b-2 xl:border-b-0 xl:border-r-2 border-border w-full xl:w-32 flex-shrink-0 flex flex-col items-center justify-center">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mb-1">Size</span>
+                    <span className="text-2xl font-black">{o["T-Shirt Size"]}</span>
                   </div>
 
-                  <div className="flex flex-row xl:flex-col w-full xl:w-40 flex-shrink-0 border-b-2 xl:border-b-0 xl:border-r-2 border-border group-hover:border-background">
-                    <div className={`flex-1 p-4 flex items-center justify-center border-r-2 xl:border-r-0 xl:border-b-2 border-border group-hover:border-background ${o["Payment Status"] === 'PAID' ? 'bg-success text-success-foreground' : 'bg-warning text-warning-foreground'}`}>
+                  <div className="flex flex-row xl:flex-col w-full xl:w-40 flex-shrink-0 border-b-2 xl:border-b-0 xl:border-r-2 border-border">
+                    <div className={`flex-1 p-2 flex items-center justify-center border-r-2 xl:border-r-0 xl:border-b-2 border-border ${o["Payment Status"] === 'PAID' ? 'bg-success text-success-foreground' : 'bg-warning text-warning-foreground'}`}>
                       <span className="text-[10px] font-black uppercase tracking-widest">{o["Payment Status"]}</span>
                     </div>
-                    <div className={`flex-1 p-4 flex items-center justify-center border-r-2 xl:border-r-0 xl:border-b-2 border-border group-hover:border-background ${o["Collection Status"] === 'COLLECTED' ? 'bg-primary text-primary-foreground' : 'bg-background text-foreground'}`}>
+                    <div className={`flex-1 p-2 flex items-center justify-center border-r-2 xl:border-r-0 xl:border-b-2 border-border ${o["Collection Status"] === 'COLLECTED' ? 'bg-primary text-primary-foreground' : 'bg-background text-foreground'}`}>
                       <span className="text-[10px] font-black uppercase tracking-widest">{o["Collection Status"] === 'COLLECTED' ? 'COLLECTED' : 'UNCOLLECTED'}</span>
                     </div>
-                    <div className="flex-1 p-4 flex items-center justify-center bg-secondary text-secondary-foreground">
+                    <div className="flex-1 p-2 flex items-center justify-center bg-secondary text-secondary-foreground">
                       <span className="text-[10px] font-black uppercase tracking-widest">{o["QR Sent"] ? 'QR SENT' : 'NO QR'}</span>
                     </div>
                   </div>
 
-                  <div className="p-6 w-full xl:w-32 flex-shrink-0 flex items-center justify-center bg-background group-hover:bg-foreground">
+                  <div className="p-4 w-full xl:w-32 flex-shrink-0 flex items-center justify-center">
                     <Link href={`/orders/${o["Order ID"]}`} className="w-full">
-                      <button className="w-full py-4 border-2 border-foreground group-hover:border-background font-black uppercase tracking-widest text-xs hover:bg-foreground hover:text-background group-hover:hover:bg-background group-hover:hover:text-foreground transition-colors duration-0">
+                      <button className="w-full py-2 border-2 border-foreground font-black uppercase tracking-widest text-xs hover:bg-foreground hover:text-background transition-colors duration-0">
                         VIEW
                       </button>
                     </Link>
