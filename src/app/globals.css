@@ -50,47 +50,41 @@
   --radius-sm: calc(var(--radius) - 4px);
 }
 
-/* Dark premium tech / understated Neo-Brutalism */
+/* Vibrant Dark Neo-Brutalism */
 :root {
-  --background: #11141c; /* very dark navy/charcoal */
-  --foreground: #f0f0ed; /* warm off-white */
+  --background: #09090b; /* Pure dark zinc */
+  --foreground: #fafafa; /* Crisp white */
 
-  --card: #1a1e28; /* slightly lighter charcoal */
-  --card-foreground: #f0f0ed;
+  --card: #18181b; /* Elevated dark zinc */
+  --card-foreground: #fafafa;
 
-  --popover: #1a1e28;
-  --popover-foreground: #f0f0ed;
+  --popover: #18181b;
+  --popover-foreground: #fafafa;
 
-  --primary: #3b70a3; /* muted electric blue */
-  --primary-foreground: #f0f0ed;
+  --primary: #fbbf24; /* Cyber Yellow */
+  --primary-foreground: #09090b; /* Black text on yellow for brutal contrast */
 
-  --secondary: #60578e; /* muted violet/indigo */
-  --secondary-foreground: #f0f0ed;
+  --secondary: #a855f7; /* Electric Purple */
+  --secondary-foreground: #fafafa;
 
-  --muted: #242936;
-  --muted-foreground: #949eb3;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
 
-  --accent: #242936;
-  --accent-foreground: #f0f0ed;
+  --accent: #22d3ee; /* Cyan */
+  --accent-foreground: #09090b;
 
-  --destructive: #9f494c; /* muted red */
-  --destructive-foreground: #f0f0ed;
+  --destructive: #ef4444; /* Vivid Red */
+  --destructive-foreground: #fafafa;
   
-  --success: #437a54; /* dark/desaturated green */
-  --success-foreground: #f0f0ed;
+  --success: #22c55e; /* Vivid Green */
+  --success-foreground: #09090b; /* Black text on bright green */
   
-  --warning: #b0813f; /* muted amber */
-  --warning-foreground: #f0f0ed;
+  --warning: #f97316; /* Bright Orange */
+  --warning-foreground: #09090b;
 
-  --border: #2b3547; /* subtle blue-gray */
-  --input: #2b3547;
-  --ring: #3b70a3;
-
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  --border: #3f3f46; /* Distinct gray for borders */
+  --input: #27272a;
+  --ring: #fbbf24;
 
   --radius: 0rem; /* Sharp corners for brutalism */
 }
@@ -108,17 +102,21 @@
 /* Custom Neo-Brutalist styling primitives */
 @layer utilities {
   .brutal-shadow {
-    box-shadow: 2px 2px 0px 0px var(--border);
+    /* Hard vibrant shadow */
+    box-shadow: 4px 4px 0px 0px var(--primary);
+    border: 1px solid var(--border);
   }
   .brutal-shadow-hover {
-    transition: box-shadow 0.2s ease, transform 0.2s ease;
+    transition: box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .brutal-shadow-hover:hover {
-    box-shadow: 4px 4px 0px 0px var(--border);
+    /* Shadow expands and changes color slightly, or element lifts */
+    box-shadow: 6px 6px 0px 0px var(--accent);
     transform: translate(-2px, -2px);
+    border-color: var(--accent);
   }
   .brutal-shadow-hover:active {
-    box-shadow: 0px 0px 0px 0px var(--border);
-    transform: translate(0px, 0px);
+    box-shadow: 0px 0px 0px 0px var(--accent);
+    transform: translate(4px, 4px);
   }
 }
