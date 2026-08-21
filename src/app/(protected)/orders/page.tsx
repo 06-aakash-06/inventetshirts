@@ -44,7 +44,7 @@ export default function OrdersPage() {
           <div className="flex-1 space-y-2">
             <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Search</label>
             <Input 
-              placeholder="Search ID, Name, Reg No..." 
+              placeholder="Search ID, Name, Reg No, Digital ID..." 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-md font-mono"
@@ -87,6 +87,7 @@ export default function OrdersPage() {
                 <TableHead className="w-[120px]">Order ID</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Reg No</TableHead>
+                <TableHead>Digital ID</TableHead>
                 <TableHead>Size</TableHead>
                 <TableHead>Method</TableHead>
                 <TableHead>Status</TableHead>
@@ -106,6 +107,7 @@ export default function OrdersPage() {
                     <TableCell className="font-mono font-bold">{o["Order ID"]}</TableCell>
                     <TableCell className="font-medium">{o["Name"]}</TableCell>
                     <TableCell className="font-mono">{o["Register Number"]}</TableCell>
+                    <TableCell className="font-mono">{o["Digital ID"]}</TableCell>
                     <TableCell className="font-bold">{o["T-Shirt Size"]}</TableCell>
                     <TableCell className="font-mono">{o["Payment Method"]}</TableCell>
                     <TableCell>

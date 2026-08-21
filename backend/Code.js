@@ -262,6 +262,7 @@ function handleSendQrTickets() {
     const emailColIdx = headers.indexOf("College Email ID") !== -1 ? headers.indexOf("College Email ID") + 1 : (headers.indexOf("Email Address") !== -1 ? headers.indexOf("Email Address") + 1 : headers.indexOf("College Email") + 1);
     const nameColIdx = headers.indexOf("Name") + 1;
     const regNoColIdx = headers.indexOf("Register Number") !== -1 ? headers.indexOf("Register Number") + 1 : (headers.indexOf("Reg No") !== -1 ? headers.indexOf("Reg No") + 1 : -1);
+    const digitalIdColIdx = headers.indexOf("Digital ID") + 1;
     const sizeColIdx = headers.indexOf("T-shirt size") !== -1 ? headers.indexOf("T-shirt size") + 1 : (headers.indexOf("T-Shirt Size") !== -1 ? headers.indexOf("T-Shirt Size") + 1 : -1);
     
     if (qrSentColIdx === 0 || paymentStatusColIdx === 0 || orderIdColIdx === 0 || emailColIdx === 0) {
@@ -277,10 +278,11 @@ function handleSendQrTickets() {
       const email = dataValues[i][emailColIdx - 1];
       const name = nameColIdx > 0 ? dataValues[i][nameColIdx - 1] : "Student";
       const regNo = regNoColIdx > 0 ? dataValues[i][regNoColIdx - 1] : "";
+      const digitalId = digitalIdColIdx > 0 ? dataValues[i][digitalIdColIdx - 1] : "";
       const size = sizeColIdx > 0 ? dataValues[i][sizeColIdx - 1] : "Unknown";
       
       if (paymentStatus === "PAID" && qrSent !== true && qrSent !== "TRUE" && orderId && email) {
-        ordersToProcess.push({ rowIndex: i + 1, orderId, email, name, regNo, size });
+        ordersToProcess.push({ rowIndex: i + 1, orderId, email, name, regNo, digitalId, size });
       }
     }
     
@@ -322,6 +324,8 @@ function handleSendQrTickets() {
               <h2 style="margin: 0 0 10px 0; font-size: 24px;">${order.orderId}</h2>
               ${order.regNo ? `<p style="font-size: 12px; letter-spacing: 2px; font-weight: bold; margin: 15px 0 5px 0;">REG NO</p>
               <h3 style="margin: 0 0 10px 0; font-size: 20px; color: #94a3b8;">${order.regNo}</h3>` : ''}
+              ${order.digitalId ? `<p style="font-size: 12px; letter-spacing: 2px; font-weight: bold; margin: 15px 0 5px 0;">DIGITAL ID</p>
+              <h3 style="margin: 0 0 10px 0; font-size: 20px; color: #94a3b8;">${order.digitalId}</h3>` : ''}
               <p style="font-size: 12px; letter-spacing: 2px; font-weight: bold; margin: 15px 0 5px 0;">SIZE</p>
               <h1 style="margin: 0; font-size: 36px; color: #4ade80;">${order.size}</h1>
             </div>
