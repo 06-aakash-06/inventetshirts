@@ -17,12 +17,15 @@ export function MobileNav() {
   useEffect(() => {
     // Console log Easter Egg
     const asciiArt = `
-      ___                     _       ___  __   
-     |_ _|_ ___ _____ _ _  __| |_ ___|_  )/ /   
-      | || ' \\ V / -_) ' \\/ _\` |/ -_)/ // _ \\  
-     |___|_||_\\_/\\___|_||_\\__,_|\\___/___\\___/  
-                                                
-    `;
+██╗███╗   ██╗██╗   ██╗███████╗███╗   ██╗████████╗███████╗
+██║████╗  ██║██║   ██║██╔════╝████╗  ██║╚══██╔══╝██╔════╝
+██║██╔██╗ ██║██║   ██║█████╗  ██╔██╗ ██║   ██║   █████╗
+██║██║╚██╗██║╚██╗ ██╔╝██╔══╝  ██║╚██╗██║   ██║   ██╔══╝
+██║██║ ╚████║ ╚████╔╝ ███████╗██║ ╚████║   ██║   ███████╗
+╚═╝╚═╝  ╚═══╝  ╚═══╝  ╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚══════╝
+
+                    '26
+`;
     console.log("%c" + asciiArt, "color: #eab308; font-weight: bold;");
     console.log("%cIf you are looking here, you are either a creep or trying to break my app. So goodbye. -Aakash", "color: #ffffff; background: #000000; padding: 4px; font-size: 14px;");
   }, []);
