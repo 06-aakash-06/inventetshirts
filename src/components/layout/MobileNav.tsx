@@ -7,6 +7,7 @@ import { Menu, X } from "lucide-react";
 
 export function MobileNav() {
   const [isOpen, setIsOpen] = useState(false);
+  const [showBarcode, setShowBarcode] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -71,6 +72,25 @@ export function MobileNav() {
           <Link href="/orders" className="transition-colors hover:text-primary hover:underline underline-offset-8 block w-full">Orders</Link>
           <Link href="/collection" className="transition-colors hover:text-primary hover:underline underline-offset-8 block w-full">Distribution</Link>
         </nav>
+
+        <div 
+          className="mt-auto p-8 flex flex-col cursor-crosshair"
+          onClick={() => setShowBarcode(!showBarcode)}
+        >
+          <div className={`overflow-hidden transition-all duration-500 ease-in-out flex items-center ${showBarcode ? 'max-h-10 opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'}`}>
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] whitespace-nowrap text-foreground">Engineered by Aakash</span>
+          </div>
+          <div className="flex items-end gap-1 h-6">
+            <div className={`w-1 h-6 bg-foreground transition-all duration-300 ${showBarcode ? 'opacity-100' : 'opacity-20'}`}></div>
+            <div className={`w-2 h-6 bg-foreground transition-all duration-300 delay-75 ${showBarcode ? 'opacity-100' : 'opacity-20'}`}></div>
+            <div className={`w-1 h-6 bg-foreground transition-all duration-300 delay-100 ${showBarcode ? 'opacity-100' : 'opacity-20'}`}></div>
+            <div className={`w-0.5 h-6 bg-foreground transition-all duration-300 ${showBarcode ? 'opacity-100' : 'opacity-20'}`}></div>
+            <div className={`w-3 h-6 bg-foreground transition-all duration-300 delay-150 ${showBarcode ? 'opacity-100' : 'opacity-20'}`}></div>
+            <div className={`w-1.5 h-6 bg-foreground transition-all duration-300 ${showBarcode ? 'opacity-100' : 'opacity-20'}`}></div>
+            <div className={`w-0.5 h-6 bg-foreground transition-all duration-300 delay-75 ${showBarcode ? 'opacity-100' : 'opacity-20'}`}></div>
+            <div className={`w-2 h-6 bg-foreground transition-all duration-300 delay-200 ${showBarcode ? 'opacity-100' : 'opacity-20'}`}></div>
+          </div>
+        </div>
       </div>
     </div>
   );

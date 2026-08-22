@@ -85,10 +85,6 @@ export default function OrderDetailClient({ orderId, userName }: { orderId: stri
                 <p className="font-medium mt-1">{order["Name"]}</p>
               </div>
               <div>
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Register Number</p>
-                <p className="font-mono mt-1">{order["Register Number"]}</p>
-              </div>
-              <div>
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Digital ID</p>
                 <p className="font-mono mt-1">{order["Digital ID"]}</p>
               </div>
@@ -99,10 +95,6 @@ export default function OrderDetailClient({ orderId, userName }: { orderId: stri
               <div>
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Phone</p>
                 <p className="font-mono mt-1">{order["Phone Number"]}</p>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Email</p>
-                <p className="font-mono text-sm mt-1">{order["College Email"]}</p>
               </div>
               <div className="col-span-2 bg-muted p-4 brutal-shadow flex justify-between items-center">
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">T-Shirt Size</p>

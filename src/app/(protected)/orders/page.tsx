@@ -115,7 +115,6 @@ export default function OrdersPage() {
                     <div className="p-4 flex-1 flex flex-col justify-center border-b-2 xl:border-b-0 xl:border-r-2 border-border">
                       <p className="text-xl font-black uppercase leading-none mb-1">{o["Name"]}</p>
                       <div className="flex flex-wrap gap-x-4 gap-y-2 text-[10px] font-bold tracking-[0.2em] uppercase text-muted-foreground mt-1">
-                        <span>{o["Register Number"]}</span>
                         {o["Digital ID"] && <span>{o["Digital ID"]}</span>}
                         <span>{o["Payment Method"]}</span>
                       </div>
