@@ -13,6 +13,8 @@ export default function CollectionClient({ userName }: { userName: string }) {
   const [search, setSearch] = useState("");
   const [updating, setUpdating] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [confirmGive, setConfirmGive] = useState(false);
+  const [successGive, setSuccessGive] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
 
   useEffect(() => {
@@ -59,18 +61,18 @@ export default function CollectionClient({ userName }: { userName: string }) {
 
   const handleGive = async () => {
     if (!matchedOrder) return;
-    if (!confirm(`Are you sure you want to mark ${matchedOrder["Order ID"]} as COLLECTED?`)) return;
     
     try {
       setUpdating(true);
       const res = await updateCollection(matchedOrder["Order ID"], userName, "COLLECTED");
       if (res.success) {
         setOrders(prev => prev.map(o => o["Order ID"] === matchedOrder["Order ID"] ? res.data : o));
-        setSearch("");
-        alert("Success! T-Shirt marked as collected.");
+        setConfirmGive(false);
+        setSuccessGive(true);
       }
     } catch (err) {
       alert("Failed to update collection.");
+      setConfirmGive(false);
     } finally {
       setUpdating(false);
     }
@@ -143,7 +145,7 @@ export default function CollectionClient({ userName }: { userName: string }) {
             <button 
               className={`w-full p-4 sm:p-6 text-xl sm:text-2xl font-black tracking-widest uppercase border-r-2 border-b-2 border-border transition-colors duration-300 ${matchedOrder["Payment Status"] === "PAID" ? "bg-foreground text-background hover:bg-background hover:text-foreground" : "bg-muted text-muted-foreground cursor-not-allowed"}`}
               disabled={updating || matchedOrder["Payment Status"] !== "PAID"}
-              onClick={handleGive}
+              onClick={() => setConfirmGive(true)}
             >
               {matchedOrder["Payment Status"] === "PAID" ? "GIVE T-SHIRT" : "PAYMENT PENDING"}
             </button>
@@ -155,6 +157,57 @@ export default function CollectionClient({ userName }: { userName: string }) {
               <span className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em]">{new Date(matchedOrder["Collected At"]).toLocaleString()}</span>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Custom Brutalist Modals */}
+      {confirmGive && matchedOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+          <div className="bg-background border-2 border-border shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:shadow-[8px_8px_0px_0px_rgba(255,255,255,1)] flex flex-col w-full max-w-md">
+            <div className="p-6 border-b-2 border-border">
+              <h2 className="text-2xl font-black uppercase tracking-tighter">Confirm Collection</h2>
+              <p className="mt-2 text-sm font-bold text-muted-foreground uppercase tracking-widest leading-relaxed">Are you sure you want to mark {matchedOrder["Order ID"]} as COLLECTED?</p>
+            </div>
+            <div className="flex">
+              <button 
+                className="flex-1 p-4 font-black uppercase tracking-widest border-r-2 border-border hover:bg-muted transition-colors disabled:opacity-50"
+                onClick={() => setConfirmGive(false)}
+                disabled={updating}
+              >
+                CANCEL
+              </button>
+              <button 
+                className="flex-1 p-4 font-black uppercase tracking-widest bg-foreground text-background hover:bg-background hover:text-foreground transition-colors disabled:opacity-50"
+                onClick={handleGive}
+                disabled={updating}
+              >
+                {updating ? "PROCESSING..." : "CONFIRM"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {successGive && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+          <div className="bg-background border-2 border-border shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:shadow-[8px_8px_0px_0px_rgba(255,255,255,1)] flex flex-col w-full max-w-md">
+            <div className="p-6 border-b-2 border-border flex flex-col items-center text-center">
+              <div className="w-16 h-16 bg-success text-success-foreground rounded-full flex items-center justify-center mb-4 border-2 border-border">
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+              </div>
+              <h2 className="text-3xl font-black uppercase tracking-tighter">Success</h2>
+              <p className="mt-2 text-sm font-bold text-muted-foreground uppercase tracking-widest">T-Shirt marked as collected.</p>
+            </div>
+            <button 
+              className="w-full p-4 font-black uppercase tracking-widest bg-foreground text-background hover:bg-background hover:text-foreground transition-colors"
+              onClick={() => {
+                setSuccessGive(false);
+                setSearch("");
+              }}
+            >
+              CONTINUE
+            </button>
+          </div>
         </div>
       )}
     </div>
