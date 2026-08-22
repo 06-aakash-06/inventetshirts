@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { getSession } from "@/lib/auth";
 import { LogoutButton } from "./LogoutButton";
 
@@ -12,7 +13,7 @@ export async function Navbar() {
       <div className="container flex h-16 items-center px-4 mx-auto justify-between">
         <div className="flex items-center gap-8">
           <Link href="/dashboard" className="flex items-center">
-            <span className="font-black text-xl tracking-tighter uppercase text-primary">INVENTE 11.0</span>
+            <Image src="/logo-full.png" alt="Invente 26" width={200} height={40} className="object-contain h-10 w-auto" priority />
           </Link>
           <nav className="flex items-center gap-6 text-xs font-bold uppercase tracking-widest text-muted-foreground">
             <Link href="/dashboard" className="transition-colors hover:text-foreground">Dashboard</Link>
