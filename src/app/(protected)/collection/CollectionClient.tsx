@@ -153,7 +153,7 @@ export default function CollectionClient({ userName }: { userName: string }) {
           
           {matchedOrder["Collection Status"] === "COLLECTED" && (
             <div className="w-full p-6 border-r-2 border-b-2 border-border bg-background text-center flex flex-col">
-              <span className="text-lg font-bold uppercase tracking-widest mb-1">Collected by {matchedOrder["Collector"]}</span>
+              <span className="text-lg font-bold uppercase tracking-widest mb-1">Collected from {matchedOrder["Collector"]}</span>
               <span className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em]">{new Date(matchedOrder["Collected At"]).toLocaleString()}</span>
             </div>
           )}
