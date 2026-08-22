@@ -90,33 +90,33 @@ export default function DashboardClient({ isAdmin }: { isAdmin?: boolean }) {
 
   return (
     <div className="p-4 sm:p-8 space-y-0 container mx-auto">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-2 border-border pb-4 mb-12">
-        <h1 className="text-5xl sm:text-7xl md:text-8xl font-black tracking-tighter uppercase leading-none">Dashboard</h1>
-        <span className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] mt-4 sm:mt-0">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-2 border-border pb-4 mb-8 sm:mb-12">
+        <h1 className="text-4xl sm:text-6xl md:text-8xl font-black tracking-tighter uppercase leading-none">Dashboard</h1>
+        <span className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] mt-2 sm:mt-0">
           SYNC / {lastSynced.toLocaleTimeString()}
         </span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-0 border-t-2 border-l-2 border-border mb-12">
-        <div className="p-4 sm:p-6 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[180px] bg-background text-foreground">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-0 border-t-2 border-l-2 border-border mb-8 sm:mb-12">
+        <div className="p-3 sm:p-6 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[140px] sm:min-h-[180px] bg-background text-foreground">
           <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">Total Orders</h2>
           <div className="text-5xl sm:text-6xl leading-none font-black tracking-tighter">{totalOrders}</div>
         </div>
-        <div className="p-4 sm:p-6 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[180px] bg-warning text-warning-foreground">
+        <div className="p-3 sm:p-6 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[140px] sm:min-h-[180px] bg-warning text-warning-foreground">
           <h2 className="text-xs font-bold uppercase tracking-[0.2em]">Pending</h2>
           <div className="text-5xl sm:text-6xl leading-none font-black tracking-tighter">{totalOrders - paidOrders.length}</div>
         </div>
-        <div className="p-4 sm:p-6 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[180px] bg-success text-success-foreground">
+        <div className="p-3 sm:p-6 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[140px] sm:min-h-[180px] bg-success text-success-foreground">
           <h2 className="text-xs font-bold uppercase tracking-[0.2em]">Paid</h2>
           <div className="text-5xl sm:text-6xl leading-none font-black tracking-tighter">{paidOrders.length}</div>
         </div>
-        <div className="p-4 sm:p-6 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[180px] bg-primary text-primary-foreground">
+        <div className="p-3 sm:p-6 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[140px] sm:min-h-[180px] bg-primary text-primary-foreground">
           <h2 className="text-xs font-bold uppercase tracking-[0.2em]">Collected</h2>
           <div className="text-5xl sm:text-6xl leading-none font-black tracking-tighter">{collectedOrders.length}</div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 border-t-2 border-l-2 border-border mb-12">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 border-t-2 border-l-2 border-border mb-8 sm:mb-12">
         <div className="p-4 sm:p-6 border-r-2 border-b-2 border-border flex flex-col justify-between bg-background text-foreground">
           <h2 className="text-xs font-bold uppercase tracking-[0.2em] mb-8 text-muted-foreground">Revenue</h2>
           <div className="space-y-4">
@@ -154,12 +154,12 @@ export default function DashboardClient({ isAdmin }: { isAdmin?: boolean }) {
       </div>
 
       {isAdmin && (
-        <div className="border-2 border-border bg-secondary text-secondary-foreground flex flex-col lg:flex-row mb-12">
+        <div className="border-2 border-border bg-secondary text-secondary-foreground flex flex-col lg:flex-row mb-8 sm:mb-12">
           <div className="p-4 sm:p-6 border-b-2 lg:border-b-0 lg:border-r-2 border-border flex-1">
-            <h2 className="text-4xl sm:text-5xl font-black tracking-tighter leading-none mb-2 uppercase">Tickets</h2>
-            <p className="text-xs font-bold uppercase tracking-[0.2em]">Batch Send QR Codes</p>
+            <h2 className="text-3xl sm:text-5xl font-black tracking-tighter leading-none mb-2 uppercase">Tickets</h2>
+            <p className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em]">Batch Send QR Codes</p>
           </div>
-          <div className="p-4 sm:p-6 flex flex-col justify-center min-w-[300px] lg:min-w-[400px]">
+          <div className="p-4 sm:p-6 flex flex-col justify-center min-w-full lg:min-w-[400px]">
             <div className="flex justify-between items-end mb-4">
               <span className="text-xs font-bold uppercase tracking-[0.2em]">Eligible</span>
               <span className="text-4xl font-black tracking-tighter leading-none">{eligibleForQr.length}</span>
@@ -179,7 +179,7 @@ export default function DashboardClient({ isAdmin }: { isAdmin?: boolean }) {
               </div>
             ) : (
               <button 
-                className="w-full font-black tracking-[0.2em] uppercase h-12 border-2 border-secondary-foreground disabled:opacity-50 hover:bg-secondary-foreground hover:text-secondary transition-colors duration-0" 
+                className="w-full font-black tracking-[0.2em] uppercase h-12 border-2 border-secondary-foreground disabled:opacity-50 hover:bg-secondary-foreground hover:text-secondary transition-colors duration-300" 
                 disabled={eligibleForQr.length === 0}
                 onClick={handleSendTickets}
               >
@@ -201,7 +201,7 @@ export default function DashboardClient({ isAdmin }: { isAdmin?: boolean }) {
             </div>
           ) : (
             recentActivities.map((act, index) => (
-              <div key={act.id} className="flex flex-col sm:flex-row border-r-2 border-b-2 border-border hover:bg-muted transition-colors duration-0">
+              <div key={act.id} className="flex flex-col sm:flex-row border-r-2 border-b-2 border-border hover:bg-muted transition-colors duration-300">
                 <div className="p-3 sm:p-4 border-b-2 sm:border-b-0 sm:border-r-2 border-border w-full sm:w-48 flex-shrink-0 flex items-center">
                   <span className={`text-[10px] font-bold tracking-[0.2em] uppercase ${act.type === 'payment' ? 'text-success' : 'text-primary'}`}>
                     {act.type}

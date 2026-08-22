@@ -78,11 +78,11 @@ export default function CollectionClient({ userName }: { userName: string }) {
 
   return (
     <div className="p-4 sm:p-8 space-y-0 container mx-auto max-w-4xl flex flex-col">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-2 border-border pb-4 mb-12">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-2 border-border pb-4 mb-8 sm:mb-12">
         <h1 className="text-4xl sm:text-6xl font-black tracking-tighter uppercase leading-none">Distribution</h1>
       </div>
       
-      <div className="flex flex-col md:flex-row border-t-2 border-l-2 border-border mb-12 bg-background">
+      <div className="flex flex-col md:flex-row border-t-2 border-l-2 border-border mb-8 sm:mb-12 bg-background">
         <input 
           autoFocus
           className="flex-1 text-xl md:text-2xl p-4 md:p-6 font-black tracking-tighter bg-transparent border-r-2 border-b-2 border-border focus:outline-none uppercase placeholder:text-muted-foreground"
@@ -91,7 +91,7 @@ export default function CollectionClient({ userName }: { userName: string }) {
           onChange={(e) => setSearch(e.target.value)}
         />
         <button 
-          className="w-full md:w-64 p-4 md:p-6 text-xl font-black tracking-widest uppercase border-r-2 border-b-2 border-border hover:bg-primary hover:text-primary-foreground transition-colors duration-0"
+          className="w-full md:w-64 p-4 md:p-6 text-xl font-black tracking-widest uppercase border-r-2 border-b-2 border-border hover:bg-primary hover:text-primary-foreground transition-colors duration-300"
           onClick={() => setIsScanning(true)}
           disabled={isScanning}
         >
@@ -102,46 +102,46 @@ export default function CollectionClient({ userName }: { userName: string }) {
       {isScanning && (
         <div className="w-full border-2 border-border bg-background flex flex-col mb-12 p-4">
           <div id="qr-reader" className="w-full min-h-[300px] bg-background"></div>
-          <button className="w-full p-4 mt-4 font-black uppercase tracking-widest border-2 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors duration-0" onClick={() => setIsScanning(false)}>
+          <button className="w-full p-4 mt-4 font-black uppercase tracking-widest border-2 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors duration-300" onClick={() => setIsScanning(false)}>
             CANCEL SCAN
           </button>
         </div>
       )}
 
       {search.length >= 3 && !matchedOrder && (
-        <div className="p-8 border-2 border-destructive bg-destructive/10 text-destructive text-center font-black uppercase tracking-widest text-xl mb-12">
+        <div className="p-4 sm:p-8 border-2 border-destructive bg-destructive/10 text-destructive text-center font-black uppercase tracking-widest text-lg sm:text-xl mb-8 sm:mb-12">
           No matching order found
         </div>
       )}
 
       {matchedOrder && (
         <div className="border-t-2 border-l-2 border-border flex flex-col">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-0">
-            <div className="p-6 md:col-span-2 border-r-2 border-b-2 border-border bg-background flex flex-col justify-center">
-              <h2 className="text-3xl sm:text-5xl font-black uppercase leading-none tracking-tighter mb-2">{matchedOrder["Name"]}</h2>
-              <p className="font-bold text-lg uppercase tracking-widest text-muted-foreground">{matchedOrder["Register Number"]} <span className="mx-2">•</span> {matchedOrder["Order ID"]}</p>
+          <div className="grid grid-cols-3 gap-0">
+            <div className="p-4 sm:p-6 col-span-2 border-r-2 border-b-2 border-border bg-background flex flex-col justify-center">
+              <h2 className="text-2xl sm:text-3xl md:text-5xl font-black uppercase leading-none tracking-tighter mb-2 break-all">{matchedOrder["Name"]}</h2>
+              <p className="font-bold text-[10px] sm:text-lg uppercase tracking-widest text-muted-foreground">{matchedOrder["Register Number"]} <span className="hidden sm:inline mx-2">•</span><br className="sm:hidden" /> {matchedOrder["Order ID"]}</p>
             </div>
-            <div className="p-6 border-r-2 border-b-2 border-border bg-background flex flex-col items-center justify-center">
+            <div className="p-4 sm:p-6 border-r-2 border-b-2 border-border bg-background flex flex-col items-center justify-center">
               <span className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] mb-1">Size</span>
               <span className="text-4xl sm:text-5xl font-black">{matchedOrder["T-Shirt Size"]}</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-0 border-r-2 border-border">
-            <div className={`p-6 flex flex-col items-center justify-center border-b-2 border-r-2 md:border-r-0 border-border ${matchedOrder["Payment Status"] === "PAID" ? "bg-success text-success-foreground" : "bg-warning text-warning-foreground"}`}>
-              <span className="text-xs font-bold uppercase tracking-[0.2em] mb-1">Payment</span>
-              <span className="text-3xl sm:text-4xl font-black tracking-tighter uppercase">{matchedOrder["Payment Status"]}</span>
+          <div className="grid grid-cols-2 gap-0 border-r-2 border-border">
+            <div className={`p-4 sm:p-6 flex flex-col items-center justify-center border-b-2 border-r-2 border-border ${matchedOrder["Payment Status"] === "PAID" ? "bg-success text-success-foreground" : "bg-warning text-warning-foreground"}`}>
+              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] mb-1">Payment</span>
+              <span className="text-xl sm:text-3xl md:text-4xl font-black tracking-tighter uppercase">{matchedOrder["Payment Status"]}</span>
             </div>
             
-            <div className={`p-6 flex flex-col items-center justify-center border-b-2 border-border border-l-0 md:border-l-2 ${matchedOrder["Collection Status"] === "COLLECTED" ? "bg-primary text-primary-foreground" : "bg-background text-foreground"}`}>
-              <span className="text-xs font-bold uppercase tracking-[0.2em] mb-1">Collection</span>
-              <span className="text-3xl sm:text-4xl font-black tracking-tighter uppercase">{matchedOrder["Collection Status"] === "COLLECTED" ? "COLLECTED" : "READY"}</span>
+            <div className={`p-4 sm:p-6 flex flex-col items-center justify-center border-b-2 border-border ${matchedOrder["Collection Status"] === "COLLECTED" ? "bg-primary text-primary-foreground" : "bg-background text-foreground"}`}>
+              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] mb-1">Collection</span>
+              <span className="text-xl sm:text-3xl md:text-4xl font-black tracking-tighter uppercase">{matchedOrder["Collection Status"] === "COLLECTED" ? "COLLECTED" : "READY"}</span>
             </div>
           </div>
 
           {matchedOrder["Collection Status"] === "NOT_COLLECTED" && (
             <button 
-              className={`w-full p-6 text-2xl font-black tracking-widest uppercase border-r-2 border-b-2 border-border transition-colors duration-0 ${matchedOrder["Payment Status"] === "PAID" ? "bg-foreground text-background hover:bg-background hover:text-foreground" : "bg-muted text-muted-foreground cursor-not-allowed"}`}
+              className={`w-full p-4 sm:p-6 text-xl sm:text-2xl font-black tracking-widest uppercase border-r-2 border-b-2 border-border transition-colors duration-300 ${matchedOrder["Payment Status"] === "PAID" ? "bg-foreground text-background hover:bg-background hover:text-foreground" : "bg-muted text-muted-foreground cursor-not-allowed"}`}
               disabled={updating || matchedOrder["Payment Status"] !== "PAID"}
               onClick={handleGive}
             >
