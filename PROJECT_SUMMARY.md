@@ -14,9 +14,9 @@
 - **State Management:** React Context (`OrdersContext`) with automatic background polling every 3 seconds + optimistic updates + exponential backoff retry.
 
 ### **Authentication & Security**
-- **Auth Engine:** Lightweight JWT stored in `httpOnly` secure cookies using `jose` library (`src/lib/auth.ts`).
-- **Middleware:** Next.js Edge Middleware (`src/middleware.ts`) enforcing route protection on `/dashboard`, `/orders`, `/collection`, and redirecting unauthenticated users to `/login`.
-- **Users:** Configurable via `TEAM_USERS_JSON` environment variable with built-in default team accounts (`admin`, `logistics`).
+- **Auth Engine:** NextAuth.js with Google OAuth Provider (`src/lib/auth-options.ts`).
+- **Middleware:** NextAuth Edge Middleware (`src/middleware.ts`) enforcing route protection on `/dashboard`, `/orders`, `/collection`, and redirecting unauthenticated users to `/login`.
+- **Users:** Configurable whitelist via `src/config/allowed-emails.json` to restrict login to authorized team members only.
 
 ### **Backend & Database**
 - **Database:** Google Sheets (connected to a live Google Form responses spreadsheet).
@@ -143,9 +143,11 @@ export interface Order {
 
 | Variable | Description | Default / Example |
 | :--- | :--- | :--- |
-| `APPS_SCRIPT_URL` | Deployed Google Apps Script Web App URL | `https://script.google.com/macros/s/.../exec` |
-| `SESSION_SECRET` | Secret key for JWT signing | 32+ character random string |
-| `TEAM_USERS_JSON` | JSON array of authorized team credentials | `[{"email":"aakash@ssn.edu.in","name":"Aakash","password":"...","role":"admin"}]` |
+| `NEXT_PUBLIC_APPS_SCRIPT_URL` | Deployed Google Apps Script Web App URL | `https://script.google.com/macros/s/.../exec` |
+| `NEXTAUTH_URL` | Base URL of the application for NextAuth | `http://localhost:3000` (Update for prod) |
+| `NEXTAUTH_SECRET` | Secret used to encrypt the NextAuth session | Random string |
+| `GOOGLE_CLIENT_ID` | OAuth 2.0 Client ID from Google Cloud | `...apps.googleusercontent.com` |
+| `GOOGLE_CLIENT_SECRET` | OAuth 2.0 Client Secret from Google Cloud | `...` |
 
 ---
 
