@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 
-const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbwGAYpvz3geFBxmK_YYQGZwJUPgwe7_mIzTs55uFc6tjHWTnrYWBrmWjjTorFS43WQ8/exec";
-// Prefer the server-only variable. NEXT_PUBLIC_ is a fallback for existing deploys
-// but ships the URL to the browser — migrate to APPS_SCRIPT_URL.
-const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL || process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || DEFAULT_GAS_URL;
+// Actions that require admin/head access — must also be blocked here since this
+// route forwards the request body to Apps Script verbatim (defense in depth
+// alongside the dedicated admin-gated /api/orders/send-qr-tickets route).
+const ADMIN_ONLY_ACTIONS = new Set(["sendQrTickets"]);
+
+const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL || "";
 const APPS_SCRIPT_TOKEN = process.env.APPS_SCRIPT_TOKEN || "";
 
 function withToken(url: string) {
@@ -15,14 +17,14 @@ function withToken(url: string) {
 async function requireSession() {
   const session = await getSession();
   if (!session) {
-    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    return { session: null, error: NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 }) };
   }
-  return null;
+  return { session, error: null };
 }
 
 export async function GET(request: Request) {
-  const unauth = await requireSession();
-  if (unauth) return unauth;
+  const { error } = await requireSession();
+  if (error) return error;
 
   try {
     if (!APPS_SCRIPT_URL) {
@@ -50,8 +52,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const unauth = await requireSession();
-  if (unauth) return unauth;
+  const { session, error } = await requireSession();
+  if (error) return error;
 
   try {
     if (!APPS_SCRIPT_URL) {
@@ -59,6 +61,10 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
+
+    if (ADMIN_ONLY_ACTIONS.has(body?.action) && session!.user.role !== "admin") {
+      return NextResponse.json({ success: false, error: "Forbidden: Admin access required." }, { status: 403 });
+    }
 
     const response = await fetch(APPS_SCRIPT_URL, {
       method: "POST",
