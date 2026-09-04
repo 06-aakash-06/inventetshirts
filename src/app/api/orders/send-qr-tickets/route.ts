@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 
 const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbwGAYpvz3geFBxmK_YYQGZwJUPgwe7_mIzTs55uFc6tjHWTnrYWBrmWjjTorFS43WQ8/exec";
-const APPS_SCRIPT_URL = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || process.env.APPS_SCRIPT_URL || DEFAULT_GAS_URL;
+const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL || process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || DEFAULT_GAS_URL;
+const APPS_SCRIPT_TOKEN = process.env.APPS_SCRIPT_TOKEN || "";
 
 export async function POST(request: Request) {
   try {
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
       headers: {
         "Content-Type": "text/plain;charset=utf-8",
       },
-      body: JSON.stringify({ action: "sendQrTickets" }),
+      body: JSON.stringify(APPS_SCRIPT_TOKEN ? { action: "sendQrTickets", token: APPS_SCRIPT_TOKEN } : { action: "sendQrTickets" }),
     });
 
     if (!response.ok) {

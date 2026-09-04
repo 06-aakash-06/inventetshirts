@@ -53,7 +53,7 @@ export async function getOrders(): Promise<Order[]> {
     // Normalize keys from messy Google Form headers
     const normalizedData = data.data.map((order: any) => ({
       ...order,
-      "T-Shirt Size": order["T-shirt size"] || order["T-Shirt Size"] || "",
+      "T-Shirt Size": order["Select T-shirt size (With size chart for reference)"] || order["T-shirt size"] || order["T-Shirt Size"] || "",
       "Payment Method": (order["Payment Method - Rs. 300"] || order["Payment Method"] || "").toString().toUpperCase().includes("UPI") ? "UPI" : "CASH",
       "Payment Screenshot": order["Payment UPI (Upload screenshot if payment done through UPI)"] || order["Payment Screenshot"] || "",
       "College Email": order["College Email ID"] || order["Email Address"] || order["College Email"] || "",
@@ -67,7 +67,7 @@ export async function getOrders(): Promise<Order[]> {
   }
 }
 
-export async function updatePayment(orderId: string, verifiedBy: string, status: "PAID" = "PAID") {
+export async function updatePayment(orderId: string, verifiedBy: string, status: "PAID" | "PENDING" = "PAID") {
   return fetchWithRetry(API_URL, {
     method: "POST",
     body: JSON.stringify({
@@ -80,16 +80,29 @@ export async function updatePayment(orderId: string, verifiedBy: string, status:
   });
 }
 
-export async function updateCollection(orderId: string, collector: string, status: "COLLECTED" = "COLLECTED") {
+export async function updateCollection(
+  ref: { orderId?: string; token?: string },
+  collector: string,
+  status: "COLLECTED" | "NOT_COLLECTED" = "COLLECTED"
+) {
   return fetchWithRetry(API_URL, {
     method: "POST",
     body: JSON.stringify({
       action: "updateCollection",
-      orderId,
+      orderId: ref.orderId,
+      token: ref.token,
       collectionStatus: status,
       collector,
       collectedAt: new Date().toISOString()
     })
+  });
+}
+
+// Force-send (or resend) one ticket, ignoring the QR Sent flag.
+export async function sendSingleTicket(orderId: string) {
+  return fetchWithRetry(API_URL, {
+    method: "POST",
+    body: JSON.stringify({ action: "sendSingleQr", orderId })
   });
 }
 
@@ -104,7 +117,18 @@ export async function updateNotes(orderId: string, notes: string) {
   });
 }
 
-export async function sendQrTicketsBatch() {
+export interface QrBatchResult {
+  success: true;
+  sent: number;
+  failed: number;
+  failures: Array<{ orderId: string; email: string; reason: string }>;
+  quotaExhausted: boolean;
+  quotaRemaining: number;
+  remaining: number;
+  done: boolean;
+}
+
+export async function sendQrTicketsBatch(): Promise<QrBatchResult> {
   const response = await fetch("/api/orders/send-qr-tickets", {
     method: "POST",
     cache: "no-store",
@@ -118,4 +142,16 @@ export async function sendQrTicketsBatch() {
     throw new Error(data.error || "Failed to send QR tickets.");
   }
   return data;
+}
+
+// Recipients Gmail will still let this Apps Script send today.
+// Returns -1 if the count could not be read.
+export async function getEmailQuota(): Promise<number> {
+  try {
+    const res = await fetch(`${API_URL}?action=getQuota`, { method: "GET", cache: "no-store" });
+    const data = await res.json();
+    return data?.success ? (data.remaining ?? -1) : -1;
+  } catch {
+    return -1;
+  }
 }
