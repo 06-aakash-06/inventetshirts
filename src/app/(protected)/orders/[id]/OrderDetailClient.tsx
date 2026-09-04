@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
-export default function OrderDetailClient({ orderId, userName }: { orderId: string, userName: string }) {
+export default function OrderDetailClient({ orderId, userName, isAdmin }: { orderId: string, userName: string, isAdmin?: boolean }) {
   const { orders, loading, setOrders, manualSync } = useOrders();
   const { toast } = useToast();
   const confirm = useConfirm();
@@ -181,6 +181,10 @@ export default function OrderDetailClient({ orderId, userName }: { orderId: stri
                     UNVERIFY PAYMENT
                   </Button>
                 </div>
+              ) : order["Payment Method"] !== "UPI" && !isAdmin ? (
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground text-center py-2">
+                  Cash payments can only be verified by heads
+                </p>
               ) : (
                 <Button
                   className="w-full font-bold tracking-widest h-12"

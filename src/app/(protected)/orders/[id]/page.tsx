@@ -8,5 +8,5 @@ export default async function OrderDetailPage(props: { params: Promise<{ id: str
   
   const p = await props.params;
 
-  return <OrderDetailClient orderId={p.id} userName={session.user.name} />;
+  return <OrderDetailClient orderId={p.id} userName={session.user.name} isAdmin={session.user.role === "admin"} />;
 }

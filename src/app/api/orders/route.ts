@@ -14,6 +14,28 @@ function withToken(url: string) {
   return url + (url.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(APPS_SCRIPT_TOKEN);
 }
 
+// Mirrors the normalization in src/lib/api.ts's getOrders() — the sheet's raw
+// header can be "Payment Method - Rs. 300" or "Payment Method".
+function isCashOrder(rawOrder: any): boolean {
+  const method = (rawOrder?.["Payment Method - Rs. 300"] || rawOrder?.["Payment Method"] || "").toString().toUpperCase();
+  return !method.includes("UPI");
+}
+
+// Looks up an order's real stored payment method directly from Apps Script
+// (the source of truth) rather than trusting a client-supplied value, so a
+// member can't just lie about the method to verify a cash payment.
+async function fetchOrderPaymentMethod(orderId: string): Promise<"UPI" | "CASH" | null> {
+  const response = await fetch(withToken(`${APPS_SCRIPT_URL}?action=getOrders`), {
+    method: "GET",
+    cache: "no-store",
+  });
+  if (!response.ok) return null;
+  const data = await response.json();
+  const match = (data?.data || []).find((o: any) => o?.["Order ID"] === orderId);
+  if (!match) return null;
+  return isCashOrder(match) ? "CASH" : "UPI";
+}
+
 async function requireSession() {
   const session = await getSession();
   if (!session) {
@@ -64,6 +86,14 @@ export async function POST(request: Request) {
 
     if (ADMIN_ONLY_ACTIONS.has(body?.action) && session!.user.role !== "admin") {
       return NextResponse.json({ success: false, error: "Forbidden: Admin access required." }, { status: 403 });
+    }
+
+    if (body?.action === "updatePayment" && body?.paymentStatus === "PAID" && session!.user.role !== "admin") {
+      const method = await fetchOrderPaymentMethod(body.orderId);
+      // Fail closed: if the order can't be found/confirmed, don't let a non-admin verify it.
+      if (method !== "UPI") {
+        return NextResponse.json({ success: false, error: "Forbidden: Cash payments can only be verified by heads." }, { status: 403 });
+      }
     }
 
     const response = await fetch(APPS_SCRIPT_URL, {

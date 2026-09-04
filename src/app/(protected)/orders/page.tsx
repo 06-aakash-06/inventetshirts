@@ -8,6 +8,7 @@ import Link from "next/link";
 type PaymentFilter = "ALL" | "PAID" | "PENDING";
 type CollectionFilter = "ALL" | "COLLECTED" | "NOT_COLLECTED";
 type QrFilter = "ALL" | "SENT" | "NOT_SENT";
+type MethodFilter = "ALL" | "UPI" | "CASH";
 
 function Segmented<T extends string>({
   label,
@@ -49,6 +50,7 @@ export default function OrdersPage() {
   const [filterPayment, setFilterPayment] = useState<PaymentFilter>("ALL");
   const [filterCollection, setFilterCollection] = useState<CollectionFilter>("ALL");
   const [filterQr, setFilterQr] = useState<QrFilter>("ALL");
+  const [filterMethod, setFilterMethod] = useState<MethodFilter>("ALL");
   const [sendingId, setSendingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -71,10 +73,11 @@ export default function OrdersPage() {
       const matchesCollection = filterCollection === "ALL" || o["Collection Status"] === filterCollection;
       const qrSent = !!o["QR Sent"];
       const matchesQr = filterQr === "ALL" || (filterQr === "SENT" ? qrSent : !qrSent);
+      const matchesMethod = filterMethod === "ALL" || o["Payment Method"] === filterMethod;
 
-      return matchesSearch && matchesPayment && matchesCollection && matchesQr;
+      return matchesSearch && matchesPayment && matchesCollection && matchesQr && matchesMethod;
     }).sort((a, b) => new Date(b.Timestamp).getTime() - new Date(a.Timestamp).getTime());
-  }, [orders, search, filterPayment, filterCollection, filterQr]);
+  }, [orders, search, filterPayment, filterCollection, filterQr, filterMethod]);
 
   const applyPaidNoQr = () => {
     setFilterPayment("PAID");
@@ -161,6 +164,16 @@ export default function OrdersPage() {
               { value: "ALL", label: "All" },
               { value: "SENT", label: "Sent" },
               { value: "NOT_SENT", label: "Not sent" },
+            ]}
+          />
+          <Segmented
+            label="Method"
+            value={filterMethod}
+            onChange={setFilterMethod}
+            options={[
+              { value: "ALL", label: "All" },
+              { value: "UPI", label: "UPI" },
+              { value: "CASH", label: "Cash" },
             ]}
           />
         </div>
