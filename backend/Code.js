@@ -1,6 +1,10 @@
 const CACHE_KEY = "INVENTE_ORDERS_V2";
 const SHEET_NAME = "Form Responses 1"; // Make sure to adjust if your sheet name is different
-const CACHE_TIME = 2; // 2-second cache for ultra-fast near instantaneous updates
+const CACHE_TIME = 5; // Short burst cache; every write/form submit invalidates it.
+const CACHE_MAX_CHARS = 90000; // Leave headroom below CacheService's per-value limit.
+const LOCK_WAIT_MS = 30000; // Allow a busy distribution line to drain instead of failing at 10s.
+const EMAIL_CLAIM_TTL_MS = 120000; // Stale email claims expire after two minutes.
+const EMAIL_CLAIM_PREFIX = "INVENTE_EMAIL_CLAIM_V1_";
 
 // ---------------------------------------------------------------------------
 // Access token (optional). Set a Script Property named ACCESS_TOKEN to require
@@ -40,6 +44,189 @@ function verifyTicketToken_(token) {
   return makeTicketToken_(orderId) === token ? orderId : null;
 }
 
+// ---------------------------------------------------------------------------
+// Safe infrastructure helpers
+// ---------------------------------------------------------------------------
+// CacheService is only an optimization. A cache failure must never prevent a
+// successful Sheet read or write from being returned to the web app.
+function cachedOrders_() {
+  try {
+    return CacheService.getScriptCache().get(CACHE_KEY);
+  } catch (err) {
+    Logger.log("Orders cache read skipped: " + String((err && err.message) || err));
+    return null;
+  }
+}
+
+function cacheOrders_(value) {
+  // Avoid even calling CacheService for a value that is close to its documented
+  // per-entry limit. The catch remains as a final safety net for encoding/limit
+  // differences inside Apps Script.
+  if (!value || value.length > CACHE_MAX_CHARS) {
+    Logger.log("Orders cache skipped because the response is too large: " + (value ? value.length : 0) + " characters");
+    return;
+  }
+  try {
+    CacheService.getScriptCache().put(CACHE_KEY, value, CACHE_TIME);
+  } catch (err) {
+    Logger.log("Orders cache write skipped: " + String((err && err.message) || err));
+  }
+}
+
+function invalidateOrdersCache_() {
+  try {
+    CacheService.getScriptCache().remove(CACHE_KEY);
+  } catch (err) {
+    Logger.log("Orders cache invalidation skipped: " + String((err && err.message) || err));
+  }
+}
+
+function jsonResponse_(payload) {
+  return ContentService.createTextOutput(JSON.stringify(payload)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function textJsonResponse_(json) {
+  return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
+}
+
+function readHeaders_(sheet) {
+  const lastColumn = sheet.getLastColumn();
+  if (!lastColumn) throw new Error("The sheet has no header row");
+  return sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+}
+
+function requireColumns_(headers, required) {
+  const missing = required.filter(function (column) { return headers.indexOf(column) === -1; });
+  if (missing.length) throw new Error("Missing required columns: " + missing.join(", "));
+}
+
+function findHeaderIndex_(headers, aliases) {
+  for (let i = 0; i < aliases.length; i++) {
+    const index = headers.indexOf(aliases[i]);
+    if (index !== -1) return index;
+  }
+  return -1;
+}
+
+function valueForHeaders_(row, headers, aliases) {
+  const index = findHeaderIndex_(headers, aliases);
+  return index === -1 ? "" : row[index];
+}
+
+function jsonCellValue_(value) {
+  if (value instanceof Date) return value.toISOString();
+  return value === null || value === undefined ? "" : value;
+}
+
+function normalizedText_(value) {
+  return String(jsonCellValue_(value) || "").trim();
+}
+
+function sameTime_(a, b) {
+  const left = normalizedText_(a);
+  const right = normalizedText_(b);
+  if (left === right) return true;
+  const leftMs = Date.parse(left);
+  const rightMs = Date.parse(right);
+  return !isNaN(leftMs) && !isNaN(rightMs) && leftMs === rightMs;
+}
+
+function isTrue_(value) {
+  return value === true || String(value).toUpperCase() === "TRUE";
+}
+
+function findRowIndex_(values, orderIdColumn, orderId) {
+  const wanted = normalizedText_(orderId);
+  if (!wanted) return -1;
+  for (let i = 1; i < values.length; i++) {
+    if (normalizedText_(values[i][orderIdColumn]) === wanted) return i + 1;
+  }
+  return -1;
+}
+
+// Same deterministic ID calculation used by getOrdersFromSheet(), but purely
+// in memory. This lets a just-submitted row be updated before its installable
+// form-submit trigger runs without writing or repairing any other Sheet row.
+function findEffectiveRowIndex_(values, headers, orderId) {
+  const orderIdColumn = headers.indexOf("Order ID");
+  if (orderIdColumn === -1) return -1;
+  const wanted = normalizedText_(orderId);
+  if (!wanted) return -1;
+
+  let nextOrderIdNumber = 1;
+  for (let i = 1; i < values.length; i++) {
+    const existing = normalizedText_(values[i][orderIdColumn]);
+    if (existing.indexOf("INV-") === 0) {
+      const number = parseInt(existing.substring(4), 10);
+      if (!isNaN(number) && number >= nextOrderIdNumber) nextOrderIdNumber = number + 1;
+    }
+  }
+
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    if (!row || row.every(function (cell) { return cell === "" || cell === null; })) continue;
+    const effectiveId = normalizedText_(row[orderIdColumn]) || ("INV-" + String(nextOrderIdNumber++).padStart(4, "0"));
+    if (effectiveId === wanted) return i + 1;
+  }
+  return -1;
+}
+
+function collectionConflict_(code, message, row, headers, rowIndex) {
+  return jsonResponse_({
+    success: false,
+    code: code,
+    error: message,
+    data: rowToObject(row, headers, rowIndex)
+  });
+}
+
+function emailClaimKey_(orderId) {
+  return EMAIL_CLAIM_PREFIX + normalizedText_(orderId);
+}
+
+// Must be called while the script lock is held. This claim lives in Script
+// Properties, not the Sheet, and prevents concurrent single/batch sends for the
+// same order while the network call to Gmail is in progress.
+function claimEmailSend_(orderId) {
+  const properties = PropertiesService.getScriptProperties();
+  const key = emailClaimKey_(orderId);
+  const now = Date.now();
+  const existing = Number(properties.getProperty(key) || 0);
+  if (existing && now - existing < EMAIL_CLAIM_TTL_MS) return false;
+  properties.setProperty(key, String(now));
+  return true;
+}
+
+function releaseEmailClaim_(orderId) {
+  try {
+    PropertiesService.getScriptProperties().deleteProperty(emailClaimKey_(orderId));
+  } catch (err) {
+    Logger.log("Email claim cleanup skipped: " + String((err && err.message) || err));
+  }
+}
+
+function emailClaimActive_(orderId) {
+  try {
+    const value = Number(PropertiesService.getScriptProperties().getProperty(emailClaimKey_(orderId)) || 0);
+    return !!value && Date.now() - value < EMAIL_CLAIM_TTL_MS;
+  } catch (err) {
+    // A claim lookup is a safety enhancement, not a reason to block a valid
+    // collection if Script Properties is temporarily unavailable.
+    Logger.log("Email claim lookup skipped: " + String((err && err.message) || err));
+    return false;
+  }
+}
+
+// Must be called while the script lock is held. The durable Sheet flag is
+// written only after Gmail succeeds; the Script Properties claim protects the
+// in-flight period without risking a false QR Sent value after a timeout.
+function markQrSent_(sheet, rowNumber, qrSentColIdx) {
+  if (!isTrue_(sheet.getRange(rowNumber, qrSentColIdx).getValue())) {
+    sheet.getRange(rowNumber, qrSentColIdx).setValue(true);
+    SpreadsheetApp.flush();
+  }
+}
+
 function doGet(e) {
   const action = e.parameter.action;
   const noCache = e.parameter.nocache === "1";
@@ -57,12 +244,10 @@ function doGet(e) {
   }
 
   if (action === "getOrders") {
-    const cache = CacheService.getScriptCache();
-
     if (!noCache) {
-      const cachedData = cache.get(CACHE_KEY);
+      const cachedData = cachedOrders_();
       if (cachedData) {
-        return ContentService.createTextOutput(cachedData).setMimeType(ContentService.MimeType.JSON);
+        return textJsonResponse_(cachedData);
       }
     }
 
@@ -70,14 +255,14 @@ function doGet(e) {
     try {
       const data = getOrdersFromSheet();
       const jsonData = JSON.stringify({ success: true, data: data });
-      cache.put(CACHE_KEY, jsonData, CACHE_TIME);
-      return ContentService.createTextOutput(jsonData).setMimeType(ContentService.MimeType.JSON);
+      cacheOrders_(jsonData);
+      return textJsonResponse_(jsonData);
     } catch (error) {
-      return ContentService.createTextOutput(JSON.stringify({ success: false, error: error.toString() })).setMimeType(ContentService.MimeType.JSON);
+      return jsonResponse_({ success: false, error: error.toString() });
     }
   }
 
-  return ContentService.createTextOutput(JSON.stringify({ success: false, error: "Invalid action" })).setMimeType(ContentService.MimeType.JSON);
+  return jsonResponse_({ success: false, error: "Invalid action" });
 }
 
 function doPost(e) {
@@ -85,7 +270,7 @@ function doPost(e) {
   try {
     body = JSON.parse(e.postData.contents);
   } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({ success: false, error: "Invalid JSON" })).setMimeType(ContentService.MimeType.JSON);
+    return jsonResponse_({ success: false, error: "Invalid JSON" });
   }
 
   if (!checkAccess_(body.token)) return denied_();
@@ -100,18 +285,26 @@ function doPost(e) {
   }
 
   const lock = LockService.getScriptLock();
+  let lockAcquired = false;
 
   try {
-    lock.waitLock(10000);
+    lock.waitLock(LOCK_WAIT_MS);
+    lockAcquired = true;
     const sheet = getSheet();
-    let headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    if (ensureColumnsExist(sheet, headers)) {
-      headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    }
+    // Request paths are deliberately read-only with respect to the header row.
+    // Missing columns are a configuration error, not a reason to append columns
+    // to the live Sheet during a busy distribution line.
+    const headers = readHeaders_(sheet);
 
-    // We hold the lock anyway — solidify any Order IDs that the form-submit
-    // trigger has not filled in yet, so IDs are stable for everyone.
-    persistPendingIds_(sheet, headers);
+    if (action === "updatePayment") {
+      requireColumns_(headers, ["Order ID", "Payment Status", "Payment Verified By", "Payment Verified At"]);
+    } else if (action === "updateCollection") {
+      requireColumns_(headers, ["Order ID", "Payment Status", "QR Sent", "Collection Status", "Collector", "Collected At"]);
+    } else if (action === "updateNotes") {
+      requireColumns_(headers, ["Order ID", "Notes"]);
+    } else {
+      throw new Error("Unknown action");
+    }
 
     const orderIdColIdx = headers.indexOf("Order ID") + 1;
     if (orderIdColIdx === 0) {
@@ -126,65 +319,133 @@ function doPost(e) {
       orderId = verified;
     }
 
-    const dataValues = sheet.getDataRange().getValues();
-    let targetRowIndex = -1;
-    for (let i = 1; i < dataValues.length; i++) {
-      if (dataValues[i][orderIdColIdx - 1] === orderId) {
-        targetRowIndex = i + 1;
-        break;
-      }
+    let dataValues = sheet.getDataRange().getValues();
+    let targetRowIndex = findRowIndex_(dataValues, orderIdColIdx - 1, orderId);
+
+    // If the form-submit trigger is still pending, resolve its deterministic ID
+    // in memory. This deliberately does not repair or modify any other Sheet
+    // row during a distribution request.
+    if (targetRowIndex === -1) {
+      targetRowIndex = findEffectiveRowIndex_(dataValues, headers, orderId);
     }
+
     if (targetRowIndex === -1) {
       throw new Error("Order not found");
+    }
+    if (!normalizedText_(dataValues[targetRowIndex - 1][orderIdColIdx - 1])) {
+      // Only the in-memory response/validation row receives the effective ID.
+      // The installable form-submit trigger remains the only persistence path.
+      dataValues[targetRowIndex - 1][orderIdColIdx - 1] = orderId;
     }
     const targetRow = dataValues[targetRowIndex - 1];
     const col = function (name) { return headers.indexOf(name); };
 
     if (action === "updatePayment") {
-      const status = body.paymentStatus || "PAID";
+      const status = String(body.paymentStatus || "PAID").toUpperCase();
+      const currentPaymentStatus = normalizedText_(targetRow[col("Payment Status")]).toUpperCase();
       if (status === "PAID") {
+        // A retry of the same request is safe, but a different verifier must
+        // not silently overwrite the first verifier's decision.
+        if (currentPaymentStatus === "PAID") {
+          const sameVerifier = normalizedText_(targetRow[col("Payment Verified By")]) === normalizedText_(body.verifiedBy);
+          const sameTimestamp = !body.verifiedAt || sameTime_(targetRow[col("Payment Verified At")], body.verifiedAt);
+          if (sameVerifier && sameTimestamp) {
+            return jsonResponse_({ success: true, idempotent: true, data: rowToObject(targetRow, headers, targetRowIndex) });
+          }
+          return collectionConflict_("ALREADY_PAID", "Payment is already verified for this order.", targetRow, headers, targetRowIndex);
+        }
         updateCell(sheet, headers, targetRowIndex, "Payment Status", "PAID");
         updateCell(sheet, headers, targetRowIndex, "Payment Verified By", body.verifiedBy);
         updateCell(sheet, headers, targetRowIndex, "Payment Verified At", body.verifiedAt || new Date().toISOString());
-      } else {
+      } else if (status === "PENDING") {
+        if (currentPaymentStatus === "PENDING" || !currentPaymentStatus) {
+          return jsonResponse_({ success: true, idempotent: true, data: rowToObject(targetRow, headers, targetRowIndex) });
+        }
         // Undo verification.
         updateCell(sheet, headers, targetRowIndex, "Payment Status", "PENDING");
         updateCell(sheet, headers, targetRowIndex, "Payment Verified By", "");
         updateCell(sheet, headers, targetRowIndex, "Payment Verified At", "");
+      } else {
+        throw new Error("Invalid payment status");
       }
     } else if (action === "updateCollection") {
-      const status = body.collectionStatus || "COLLECTED";
+      const status = String(body.collectionStatus || "COLLECTED").toUpperCase();
+      const collectionStatusCol = col("Collection Status");
+      const collectorCol = col("Collector");
+      const collectedAtCol = col("Collected At");
+      const currentCollectionStatus = normalizedText_(targetRow[collectionStatusCol]).toUpperCase();
+
       if (status === "COLLECTED") {
+        const collector = normalizedText_(body.collector);
+        if (!collector) throw new Error("Collector is required");
+
+        // This check happens while the script lock is held. The first station
+        // changes the row; every later station sees the committed COLLECTED
+        // state and cannot overwrite the original collector/time.
+        if (currentCollectionStatus === "COLLECTED") {
+          const sameAttempt = !!body.collectedAt &&
+            normalizedText_(targetRow[collectorCol]) === collector &&
+            sameTime_(targetRow[collectedAtCol], body.collectedAt);
+          if (sameAttempt) {
+            return jsonResponse_({ success: true, idempotent: true, data: rowToObject(targetRow, headers, targetRowIndex) });
+          }
+          return collectionConflict_("ALREADY_COLLECTED", "This order has already been collected.", targetRow, headers, targetRowIndex);
+        }
+
         const paid = targetRow[col("Payment Status")] === "PAID";
-        const qrSent = targetRow[col("QR Sent")] === true || targetRow[col("QR Sent")] === "TRUE";
+        const qrSent = isTrue_(targetRow[col("QR Sent")]);
         if (!paid) throw new Error("Payment is not verified for this order");
+        if (emailClaimActive_(orderId)) throw new Error("Ticket email is still being sent; try again shortly");
         if (!qrSent && !body.force) throw new Error("Ticket has not been emailed yet");
         updateCell(sheet, headers, targetRowIndex, "Collection Status", "COLLECTED");
-        updateCell(sheet, headers, targetRowIndex, "Collector", body.collector);
+        updateCell(sheet, headers, targetRowIndex, "Collector", collector);
         updateCell(sheet, headers, targetRowIndex, "Collected At", body.collectedAt || new Date().toISOString());
-      } else {
+      } else if (status === "NOT_COLLECTED") {
+        // Repeating an undo is harmless. Otherwise protect against an old
+        // browser/toast undoing a newer collection.
+        if (currentCollectionStatus !== "COLLECTED") {
+          return jsonResponse_({ success: true, idempotent: true, data: rowToObject(targetRow, headers, targetRowIndex) });
+        }
+
+        const expectedAt = body.expectedCollectedAt;
+        const expectedCollector = body.expectedCollector;
+        const currentCollector = normalizedText_(targetRow[collectorCol]);
+        if ((expectedAt && !sameTime_(targetRow[collectedAtCol], expectedAt)) ||
+            (expectedCollector && currentCollector !== normalizedText_(expectedCollector)) ||
+            (!expectedAt && body.collector && currentCollector && currentCollector !== normalizedText_(body.collector))) {
+          return collectionConflict_("STALE_COLLECTION", "This collection changed in another station. Refresh before undoing it.", targetRow, headers, targetRowIndex);
+        }
+
         // Undo collection.
         updateCell(sheet, headers, targetRowIndex, "Collection Status", "NOT_COLLECTED");
         updateCell(sheet, headers, targetRowIndex, "Collector", "");
         updateCell(sheet, headers, targetRowIndex, "Collected At", "");
+      } else {
+        throw new Error("Invalid collection status");
       }
     } else if (action === "updateNotes") {
       updateCell(sheet, headers, targetRowIndex, "Notes", body.notes);
-    } else {
-      throw new Error("Unknown action");
     }
 
-    CacheService.getScriptCache().remove(CACHE_KEY);
-
+    // Commit all cell updates before reading the authoritative response and
+    // before releasing the lock to the next station.
+    SpreadsheetApp.flush();
+    invalidateOrdersCache_();
     const updatedRow = sheet.getRange(targetRowIndex, 1, 1, sheet.getLastColumn()).getValues()[0];
+    // A just-submitted row can still have a blank persisted Order ID while its
+    // installable form-submit trigger is pending. Keep the response aligned
+    // with the effective ID used for this request without writing that ID here.
+    if (!normalizedText_(updatedRow[orderIdColIdx - 1])) {
+      updatedRow[orderIdColIdx - 1] = orderId;
+    }
     const updatedOrder = rowToObject(updatedRow, headers, targetRowIndex);
 
-    return ContentService.createTextOutput(JSON.stringify({ success: true, data: updatedOrder })).setMimeType(ContentService.MimeType.JSON);
+    return jsonResponse_({ success: true, data: updatedOrder });
 
   } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({ success: false, error: error.toString() })).setMimeType(ContentService.MimeType.JSON);
+    return jsonResponse_({ success: false, error: error.toString() });
   } finally {
-    lock.releaseLock();
+    if (lockAcquired) lock.releaseLock();
   }
 }
 
@@ -233,7 +494,9 @@ function ensureColumnsExist(sheet, headers) {
 
 function getSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  return ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
+  const sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) throw new Error("Sheet '" + SHEET_NAME + "' not found; no fallback Sheet was used");
+  return sheet;
 }
 
 // Assigns Order IDs and default statuses to any rows missing them. This is the
@@ -268,7 +531,7 @@ function persistPendingIds_(sheet, headers) {
   }
   if (wrote) {
     SpreadsheetApp.flush();
-    CacheService.getScriptCache().remove(CACHE_KEY);
+    invalidateOrdersCache_();
   }
 }
 
@@ -276,17 +539,9 @@ function persistPendingIds_(sheet, headers) {
 // yet) get a deterministic in-memory ID; the trigger / next write persists it.
 function getOrdersFromSheet() {
   const sheet = getSheet();
-  let headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const headers = readHeaders_(sheet);
   if (headers.indexOf("Order ID") === -1) {
-    // First run ever — we have to create the columns once.
-    const lock = LockService.getScriptLock();
-    lock.waitLock(10000);
-    try {
-      ensureColumnsExist(sheet, headers);
-      headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    } finally {
-      lock.releaseLock();
-    }
+    throw new Error("Order ID column not found; no Sheet changes were made");
   }
 
   const values = sheet.getDataRange().getValues();
@@ -321,23 +576,42 @@ function getOrdersFromSheet() {
 }
 
 function rowToObject(row, headers, rowIndex) {
-  const obj = { _rowIndex: rowIndex };
-  for (let j = 0; j < headers.length; j++) {
-    const key = headers[j];
-    if (key) {
-      let val = row[j];
-      if (val instanceof Date) val = val.toISOString();
-      obj[key] = val;
-    }
-  }
-  return obj;
+  const paymentMethod = normalizedText_(valueForHeaders_(row, headers, ["Payment Method - Rs. 300", "Payment Method"]));
+
+  // Return only the stable fields used by the web app. Besides reducing the
+  // response size, this avoids repeating long Google Form header names for
+  // every order and keeps the cache below its per-value limit for much longer.
+  return {
+    _rowIndex: rowIndex,
+    "Timestamp": jsonCellValue_(valueForHeaders_(row, headers, ["Timestamp"])),
+    "College Email": jsonCellValue_(valueForHeaders_(row, headers, ["College Email ID", "Email Address", "College Email"])),
+    "Digital ID": jsonCellValue_(valueForHeaders_(row, headers, ["Digital ID"])),
+    "Register Number": jsonCellValue_(valueForHeaders_(row, headers, ["Register Number", "Reg No"])),
+    "Name": jsonCellValue_(valueForHeaders_(row, headers, ["Name"])),
+    "Phone Number": jsonCellValue_(valueForHeaders_(row, headers, ["Phone Number"])),
+    "Year": jsonCellValue_(valueForHeaders_(row, headers, ["Year"])),
+    "T-Shirt Size": jsonCellValue_(valueForHeaders_(row, headers, ["Select T-shirt size (With size chart for reference)", "T-shirt size", "T-Shirt Size"])),
+    "Payment Method": paymentMethod.toUpperCase().indexOf("UPI") !== -1 ? "UPI" : "CASH",
+    "Payment Screenshot": jsonCellValue_(valueForHeaders_(row, headers, ["Payment UPI (Upload screenshot if payment done through UPI)", "Payment Screenshot"])),
+    "Order ID": jsonCellValue_(valueForHeaders_(row, headers, ["Order ID"])),
+    "Payment Status": jsonCellValue_(valueForHeaders_(row, headers, ["Payment Status"])),
+    "Payment Verified By": jsonCellValue_(valueForHeaders_(row, headers, ["Payment Verified By"])),
+    "Payment Verified At": jsonCellValue_(valueForHeaders_(row, headers, ["Payment Verified At"])),
+    "Collection Status": jsonCellValue_(valueForHeaders_(row, headers, ["Collection Status"])),
+    "Collector": jsonCellValue_(valueForHeaders_(row, headers, ["Collector"])),
+    "Collected At": jsonCellValue_(valueForHeaders_(row, headers, ["Collected At"])),
+    "Notes": jsonCellValue_(valueForHeaders_(row, headers, ["Notes"])),
+    "QR Sent": isTrue_(valueForHeaders_(row, headers, ["QR Sent"]))
+  };
 }
 
 // Installable "on form submit" trigger — see setupTriggers().
 function onFormSubmit(e) {
   const lock = LockService.getScriptLock();
+  let lockAcquired = false;
   try {
-    lock.waitLock(10000);
+    lock.waitLock(LOCK_WAIT_MS);
+    lockAcquired = true;
     const sheet = getSheet();
     let headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     if (ensureColumnsExist(sheet, headers)) {
@@ -347,13 +621,13 @@ function onFormSubmit(e) {
   } catch (err) {
     // Never let a trigger failure block form submissions.
   } finally {
-    lock.releaseLock();
-    CacheService.getScriptCache().remove(CACHE_KEY);
+    if (lockAcquired) lock.releaseLock();
+    invalidateOrdersCache_();
   }
 }
 
 function onEdit(e) {
-  CacheService.getScriptCache().remove(CACHE_KEY);
+  invalidateOrdersCache_();
 }
 
 // ---------------------------------------------------------------------------
@@ -425,39 +699,69 @@ function readOrderForEmail_(sheet, headers, rowValues, rowNumber) {
 // Force-send (or resend) a single ticket regardless of the QR Sent flag.
 function handleSendSingleQr(orderId) {
   const lock = LockService.getScriptLock();
+  let lockAcquired = false;
+  let emailClaimed = false;
+  let hadQrSent = false;
+  let rowNumber = -1;
+  let qrSentColIdx = -1;
+  let order = null;
+  let sheet = null;
+
   try {
-    lock.waitLock(10000);
-    const sheet = getSheet();
-    let headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    if (ensureColumnsExist(sheet, headers)) {
-      headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    }
-    const qrSentColIdx = headers.indexOf("QR Sent") + 1;
+    lock.waitLock(LOCK_WAIT_MS);
+    lockAcquired = true;
+    sheet = getSheet();
+    const headers = readHeaders_(sheet);
+    requireColumns_(headers, ["Order ID", "Payment Status", "QR Sent"]);
+    qrSentColIdx = headers.indexOf("QR Sent") + 1;
     const paymentStatusCol = headers.indexOf("Payment Status");
     const orderIdCol = headers.indexOf("Order ID");
 
     const values = sheet.getDataRange().getValues();
-    let rowNumber = -1;
-    for (let i = 1; i < values.length; i++) {
-      if (values[i][orderIdCol] === orderId) { rowNumber = i + 1; break; }
-    }
+    rowNumber = findRowIndex_(values, orderIdCol, orderId);
     if (rowNumber === -1) throw new Error("Order not found");
 
     const row = values[rowNumber - 1];
     if (row[paymentStatusCol] !== "PAID") throw new Error("Payment is not verified for this order");
 
-    const order = readOrderForEmail_(sheet, headers, row, rowNumber);
+    order = readOrderForEmail_(sheet, headers, row, rowNumber);
     if (!order.email) throw new Error("No email address on file for this order");
-    sendTicketEmail_(order);
-    sheet.getRange(rowNumber, qrSentColIdx).setValue(true);
-    SpreadsheetApp.flush();
-    CacheService.getScriptCache().remove(CACHE_KEY);
 
-    return ContentService.createTextOutput(JSON.stringify({ success: true, sent: 1, orderId: orderId })).setMimeType(ContentService.MimeType.JSON);
+    hadQrSent = isTrue_(row[qrSentColIdx - 1]);
+    if (!claimEmailSend_(order.orderId)) {
+      throw new Error("A ticket email is already being sent for this order");
+    }
+    emailClaimed = true;
+
   } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({ success: false, error: error.toString() })).setMimeType(ContentService.MimeType.JSON);
+    if (emailClaimed) releaseEmailClaim_(orderId);
+    return jsonResponse_({ success: false, error: error.toString() });
   } finally {
-    lock.releaseLock();
+    if (lockAcquired) lock.releaseLock();
+  }
+
+  try {
+    // Gmail is deliberately outside the Sheet lock. Collection updates can
+    // proceed while this network call is in flight.
+    sendTicketEmail_(order);
+
+    if (!hadQrSent) {
+      let finalizeLockAcquired = false;
+      try {
+        lock.waitLock(LOCK_WAIT_MS);
+        finalizeLockAcquired = true;
+        markQrSent_(sheet, rowNumber, qrSentColIdx);
+        invalidateOrdersCache_();
+      } finally {
+        if (finalizeLockAcquired) lock.releaseLock();
+      }
+    }
+
+    releaseEmailClaim_(order.orderId);
+    return jsonResponse_({ success: true, sent: 1, orderId: orderId });
+  } catch (error) {
+    releaseEmailClaim_(order.orderId);
+    return jsonResponse_({ success: false, error: error.toString() });
   }
 }
 
@@ -468,18 +772,14 @@ function handleSendQrTickets() {
 
   try {
     const sheet = getSheet();
-    let headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-
-    if (ensureColumnsExist(sheet, headers)) {
-      headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    }
-
+    const headers = readHeaders_(sheet);
+    requireColumns_(headers, ["Order ID", "Payment Status", "QR Sent"]);
     const dataValues = sheet.getDataRange().getValues();
 
     const qrSentColIdx = headers.indexOf("QR Sent") + 1;
     const paymentStatusColIdx = headers.indexOf("Payment Status") + 1;
     const orderIdColIdx = headers.indexOf("Order ID") + 1;
-    const emailColIdx = headers.indexOf("College Email ID") !== -1 ? headers.indexOf("College Email ID") + 1 : (headers.indexOf("Email Address") !== -1 ? headers.indexOf("Email Address") + 1 : headers.indexOf("College Email") + 1);
+    const emailColIdx = findHeaderIndex_(headers, ["College Email ID", "Email Address", "College Email"]) + 1;
 
     if (qrSentColIdx === 0 || paymentStatusColIdx === 0 || orderIdColIdx === 0 || emailColIdx === 0) {
       throw new Error("Missing required columns");
@@ -500,11 +800,8 @@ function handleSendQrTickets() {
     // Gmail / Apps Script enforces a HARD daily recipient cap (100/day on a
     // consumer @gmail.com account, 1500/day on Google Workspace). When it is
     // reached we stop cleanly and report it, so the operator just re-runs the
-    // next day. The "QR Sent" column is the permanent guard against
-    // double-sending: a row is marked TRUE while it is being sent and rolled
-    // back to blank only if that send throws, so a row that has ever been
-    // emailed stays TRUE forever. Tomorrow's run therefore skips every row
-    // sent today and picks up exactly the ones that were quota-skipped.
+    // next day. The "QR Sent" column is written only after Gmail succeeds, so
+    // a failed or interrupted send remains retryable.
     let quotaLeft = MailApp.getRemainingDailyQuota();
     let quotaExhausted = false;
     const failures = [];
@@ -518,48 +815,55 @@ function handleSendQrTickets() {
       }
 
       // Claim the row under lock BEFORE sending so a concurrent run can't also
-      // grab it. If the send then fails we roll the claim back below.
+      // grab it. The small Script Properties claim also covers explicit
+      // single-ticket resends, which intentionally ignore QR Sent=true.
       let claimed = false;
-      lock.waitLock(10000);
+      let claimLockAcquired = false;
       try {
+        lock.waitLock(LOCK_WAIT_MS);
+        claimLockAcquired = true;
         const currentQrSent = sheet.getRange(order.rowIndex, qrSentColIdx).getValue();
-        if (currentQrSent === true || currentQrSent === "TRUE") {
+        if (isTrue_(currentQrSent)) {
           continue; // Already sent (earlier today, a previous day, or a concurrent run)
         }
-        sheet.getRange(order.rowIndex, qrSentColIdx).setValue(true);
-        SpreadsheetApp.flush();
+        if (!claimEmailSend_(order.orderId)) continue;
         claimed = true;
       } finally {
-        lock.releaseLock();
+        if (claimLockAcquired) lock.releaseLock();
       }
       if (!claimed) continue;
 
       // Send outside the lock to avoid holding it during a slow network call.
       try {
         sendTicketEmail_(order);
+
+        let finalizeLockAcquired = false;
+        try {
+          lock.waitLock(LOCK_WAIT_MS);
+          finalizeLockAcquired = true;
+          markQrSent_(sheet, order.rowIndex, qrSentColIdx);
+        } finally {
+          if (finalizeLockAcquired) lock.releaseLock();
+        }
+
+        releaseEmailClaim_(order.orderId);
         sentCount++;
         quotaLeft--;
       } catch (err) {
-        // Roll the claim back so this row is retried on the next run, and keep
-        // going instead of aborting the whole batch for one bad address.
-        lock.waitLock(10000);
-        try {
-          sheet.getRange(order.rowIndex, qrSentColIdx).setValue("");
-          SpreadsheetApp.flush();
-        } finally {
-          lock.releaseLock();
-        }
+        releaseEmailClaim_(order.orderId);
+        // Leave QR Sent blank so this row is retryable, and keep going instead
+        // of aborting the whole batch for one bad address.
         failures.push({ orderId: order.orderId, email: order.email, reason: String((err && err.message) || err) });
       }
     }
 
     if (sentCount > 0) {
-      CacheService.getScriptCache().remove(CACHE_KEY);
+      invalidateOrdersCache_();
     }
 
     const remaining = ordersToProcess.length - sentCount;
 
-    return ContentService.createTextOutput(JSON.stringify({
+    return jsonResponse_({
       success: true,
       sent: sentCount,
       failed: failures.length,
@@ -568,9 +872,9 @@ function handleSendQrTickets() {
       quotaRemaining: Math.max(0, quotaLeft),
       remaining: remaining,
       done: remaining <= 0 || quotaExhausted
-    })).setMimeType(ContentService.MimeType.JSON);
+    });
 
   } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({ success: false, error: error.toString() })).setMimeType(ContentService.MimeType.JSON);
+    return jsonResponse_({ success: false, error: error.toString() });
   }
 }
