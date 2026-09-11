@@ -1,7 +1,6 @@
 "use client"
-import { useEffect, useState } from "react";
-import { useOrders } from "@/context/OrdersContext";
-import { updatePayment, updateCollection, updateNotes, sendSingleTicket } from "@/lib/api";
+import { useCallback, useEffect, useState } from "react";
+import { getOrder, Order, updatePayment, updateCollection, updateNotes, sendSingleTicket } from "@/lib/api";
 import { useToast, useConfirm } from "@/components/ui/toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,25 +9,40 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
 export default function OrderDetailClient({ orderId, userName, isAdmin }: { orderId: string, userName: string, isAdmin?: boolean }) {
-  const { orders, loading, setOrders, manualSync } = useOrders();
   const { toast } = useToast();
   const confirm = useConfirm();
+  const [order, setOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [editingNotes, setEditingNotes] = useState(false);
 
-  useEffect(() => {
-    document.title = `${orderId} · Orders · INVENTE 11.0`;
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await getOrder(orderId);
+      setOrder(data);
+      setLoadError(null);
+    } catch (err: unknown) {
+      setLoadError(err instanceof Error ? err.message : "Failed to load order");
+    } finally {
+      setLoading(false);
+    }
   }, [orderId]);
 
-  const order = orders.find(o => o["Order ID"] === orderId);
+  useEffect(() => {
+    document.title = `${orderId} · Orders · INVENTE 11.0`;
+    const initialLoad = window.setTimeout(() => { void reload(); }, 0);
+    return () => window.clearTimeout(initialLoad);
+  }, [orderId, reload]);
 
   if (loading && !order) return <div className="p-8 font-mono">Loading...</div>;
-  if (!order) return <div className="p-8 text-destructive font-mono">Order not found.</div>;
+  if (!order) return <div className="p-8 text-destructive font-mono">{loadError || "Order not found."}</div>;
 
   const applyResult = (res: any) => {
-    if (res?.data) setOrders(prev => prev.map(o => o["Order ID"] === orderId ? { ...o, ...res.data } : o));
-    else manualSync();
+    if (res?.data) setOrder(prev => prev ? { ...prev, ...res.data } : prev);
+    else void reload();
   };
 
   const run = async (fn: () => Promise<any>, okTitle: string, failTitle: string) => {

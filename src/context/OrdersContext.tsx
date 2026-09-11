@@ -12,6 +12,8 @@ interface OrdersContextType {
 }
 
 const OrdersContext = createContext<OrdersContextType | undefined>(undefined);
+const ORDERS_STORAGE_KEY = "invente-orders-v1";
+const ORDERS_POLL_MS = 15000;
 
 export function OrdersProvider({ children }: { children: React.ReactNode }) {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -31,6 +33,11 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
         hasData.current = true;
         setLastSynced(new Date());
         setError(null);
+        try {
+          window.localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify({ savedAt: Date.now(), data }));
+        } catch {
+          // Browser storage is only a stale-data convenience, never a requirement.
+        }
       }
     } catch (err: any) {
       // Only disrupt the UI with an error if it's the initial load. Ignore background polling transient errors.
@@ -38,16 +45,31 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
     } finally {
       if (isMounted.current) {
         setLoading(false);
-        timeoutRef.current = setTimeout(fetchOrders, 3000);
+        timeoutRef.current = setTimeout(fetchOrders, ORDERS_POLL_MS);
       }
     }
   };
 
   useEffect(() => {
     isMounted.current = true;
-    fetchOrders();
+    const initialLoad = window.setTimeout(() => {
+      try {
+        const stored = window.localStorage.getItem(ORDERS_STORAGE_KEY);
+        const parsed = stored ? JSON.parse(stored) : null;
+        if (Array.isArray(parsed?.data) && parsed.data.length > 0 && isMounted.current) {
+          setOrders(parsed.data);
+          hasData.current = true;
+          setLoading(false);
+          setLastSynced(new Date(Number(parsed.savedAt) || Date.now()));
+        }
+      } catch {
+        // Ignore malformed/blocked browser storage and use the live request.
+      }
+      void fetchOrders();
+    }, 0);
     return () => {
       isMounted.current = false;
+      window.clearTimeout(initialLoad);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, []);
