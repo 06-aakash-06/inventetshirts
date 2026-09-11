@@ -1,8 +1,7 @@
 "use client"
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Html5Qrcode } from "html5-qrcode";
-import { useOrders } from "@/context/OrdersContext";
-import { updateCollection } from "@/lib/api";
+import { getOrder, Order, updateCollection } from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
 import { Check, X, AlertTriangle } from "lucide-react";
 
@@ -18,14 +17,17 @@ function parseScan(raw: string): { orderIdGuess: string; token: string | null } 
 }
 
 export default function CollectionClient({ userName }: { userName: string }) {
-  const { orders, setOrders, manualSync } = useOrders();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [scanToken, setScanToken] = useState<string | null>(null);
+  const [matchedOrder, setMatchedOrder] = useState<Order | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupError, setLookupError] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [confirmGive, setConfirmGive] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const lookupRequestRef = useRef(0);
 
   useEffect(() => {
     document.title = "Distribution · INVENTE 11.0";
@@ -64,17 +66,34 @@ export default function CollectionClient({ userName }: { userName: string }) {
     };
   }, [isScanning, toast]);
 
-  const q = search.trim().toLowerCase();
-  // Exact identifier match only — no partial-name fallback, so we can't hand a
-  // shirt to the wrong person because two names look alike.
-  const matchedOrder = q.length >= 3
-    ? orders.find(o =>
-        String(o["Order ID"] || "").toLowerCase() === q ||
-        String(o["Register Number"] || "").toLowerCase() === q ||
-        String(o["Digital ID"] || "").toLowerCase() === q ||
-        String(o["Phone Number"] || "").toLowerCase() === q
-      )
-    : null;
+  const lookupOrder = useCallback(async (reference: string, requestId: number) => {
+    setLookupLoading(true);
+    setLookupError(null);
+    try {
+      const order = await getOrder(reference);
+      if (lookupRequestRef.current !== requestId) return;
+      setMatchedOrder(order);
+    } catch (err: unknown) {
+      if (lookupRequestRef.current !== requestId) return;
+      setMatchedOrder(null);
+      setLookupError(err instanceof Error ? err.message : "Could not find that order");
+    } finally {
+      if (lookupRequestRef.current === requestId) setLookupLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const reference = scanToken || search.trim();
+    const requestId = ++lookupRequestRef.current;
+    if (reference.length < 3) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void lookupOrder(reference, requestId);
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [search, scanToken, lookupOrder]);
 
   const paid = matchedOrder?.["Payment Status"] === "PAID";
   const qrSent = !!matchedOrder?.["QR Sent"];
@@ -87,7 +106,13 @@ export default function CollectionClient({ userName }: { userName: string }) {
     : !qrSent ? "Ticket not emailed yet"
     : null;
 
-  const reset = () => { setSearch(""); setScanToken(null); };
+  const reset = () => {
+    setSearch("");
+    setScanToken(null);
+    setMatchedOrder(null);
+    setLookupError(null);
+    setLookupLoading(false);
+  };
 
   const setCollection = async (status: "COLLECTED" | "NOT_COLLECTED", ref: { orderId: string; token?: string }) => {
     const res = await updateCollection(
@@ -96,9 +121,9 @@ export default function CollectionClient({ userName }: { userName: string }) {
       status,
     );
     if (res?.success && res.data) {
-      setOrders(prev => prev.map(o => o["Order ID"] === ref.orderId ? { ...o, ...res.data } : o));
+      setMatchedOrder(prev => prev ? { ...prev, ...res.data } : res.data);
     } else if (res?.success) {
-      manualSync();
+      void lookupOrder(ref.orderId, lookupRequestRef.current);
     }
     return res;
   };
@@ -128,8 +153,13 @@ export default function CollectionClient({ userName }: { userName: string }) {
         toast({ title: "Could not mark collected", description: res?.error, variant: "error", duration: 0 });
         setConfirmGive(false);
       }
-    } catch (err: any) {
-      toast({ title: "Could not mark collected", description: err.message, variant: "error", duration: 0 });
+    } catch (err: unknown) {
+      toast({
+        title: "Could not mark collected",
+        description: err instanceof Error ? err.message : "The collection update failed",
+        variant: "error",
+        duration: 0,
+      });
       setConfirmGive(false);
     } finally {
       setUpdating(false);
@@ -149,7 +179,13 @@ export default function CollectionClient({ userName }: { userName: string }) {
           className="flex-1 text-xl md:text-2xl p-4 md:p-6 font-black tracking-tighter bg-transparent border-r-2 border-b-2 border-border focus:outline-none focus-visible:ring-2 focus-visible:ring-primary uppercase placeholder:text-muted-foreground"
           placeholder="Scan or type ID..."
           value={search}
-          onChange={(e) => { setSearch(e.target.value); setScanToken(null); }}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setScanToken(null);
+            setMatchedOrder(null);
+            setLookupError(null);
+            setLookupLoading(false);
+          }}
         />
         <button
           aria-label="Open camera to scan a QR ticket"
@@ -173,9 +209,15 @@ export default function CollectionClient({ userName }: { userName: string }) {
         </div>
       )}
 
-      {search.length >= 3 && !matchedOrder && (
+      {search.length >= 3 && lookupLoading && (
+        <div className="p-4 sm:p-8 border-2 border-border bg-muted text-muted-foreground text-center font-black uppercase tracking-widest text-lg sm:text-xl mb-8 sm:mb-12">
+          Looking up order...
+        </div>
+      )}
+
+      {search.length >= 3 && !lookupLoading && !matchedOrder && (
         <div className="p-4 sm:p-8 border-2 border-destructive bg-destructive/10 text-destructive text-center font-black uppercase tracking-widest text-lg sm:text-xl mb-8 sm:mb-12">
-          No matching order for that exact ID / register number
+          {lookupError || "No matching order for that exact ID / register number"}
         </div>
       )}
 

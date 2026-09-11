@@ -60,6 +60,17 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 3) {
   }
 }
 
+function normalizeOrder(order: RawOrder): Order {
+  return {
+    ...order,
+    "T-Shirt Size": order["Select T-shirt size (With size chart for reference)"] || order["T-shirt size"] || order["T-Shirt Size"] || "",
+    "Payment Method": (order["Payment Method - Rs. 300"] || order["Payment Method"] || "").toString().toUpperCase().includes("UPI") ? "UPI" : "CASH",
+    "Payment Screenshot": order["Payment UPI (Upload screenshot if payment done through UPI)"] || order["Payment Screenshot"] || "",
+    "College Email": order["College Email ID"] || order["Email Address"] || order["College Email"] || "",
+    "QR Sent": order["QR Sent"] === true || order["QR Sent"] === "TRUE",
+  } as Order;
+}
+
 export async function getOrders(): Promise<Order[]> {
   try {
     const data = await fetchJsonWithTimeout(`${API_URL}?action=getOrders`, {
@@ -70,20 +81,22 @@ export async function getOrders(): Promise<Order[]> {
     if (!data.success) throw new Error(data.error);
     
     // Normalize keys from messy Google Form headers
-    const normalizedData = data.data.map((order: RawOrder) => ({
-      ...order,
-      "T-Shirt Size": order["Select T-shirt size (With size chart for reference)"] || order["T-shirt size"] || order["T-Shirt Size"] || "",
-      "Payment Method": (order["Payment Method - Rs. 300"] || order["Payment Method"] || "").toString().toUpperCase().includes("UPI") ? "UPI" : "CASH",
-      "Payment Screenshot": order["Payment UPI (Upload screenshot if payment done through UPI)"] || order["Payment Screenshot"] || "",
-      "College Email": order["College Email ID"] || order["Email Address"] || order["College Email"] || "",
-      "QR Sent": order["QR Sent"] === true || order["QR Sent"] === "TRUE",
-    }));
+    const normalizedData = data.data.map(normalizeOrder);
 
     return normalizedData;
   } catch (error) {
     // Don't console.error here to avoid spamming the console on transient background polling drops
     throw error;
   }
+}
+
+export async function getOrder(reference: string): Promise<Order> {
+  const data = await fetchJsonWithTimeout(`${API_URL}?action=getOrder&ref=${encodeURIComponent(reference)}`, {
+    method: "GET",
+    cache: "no-store",
+  });
+  if (!data.success) throw new Error(data.error || "Order not found");
+  return normalizeOrder(data.data as RawOrder);
 }
 
 export interface DashboardActivity {

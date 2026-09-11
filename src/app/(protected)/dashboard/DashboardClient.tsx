@@ -6,6 +6,7 @@ import { useToast, useConfirm } from "@/components/ui/toast";
 const pct = (value: number, target: number) => Math.min(100, target > 0 ? (value / target) * 100 : 0);
 const pctLabel = (p: number, hasProgress: boolean) =>
   !hasProgress ? "0" : p < 1 ? p.toFixed(1) : String(Math.round(p));
+const DASHBOARD_STORAGE_KEY = "invente-dashboard-summary-v1";
 
 function GoalBar({ label, value, target, color }: { label: string; value: number; target: number; color: string }) {
   const p = pct(value, target);
@@ -52,6 +53,11 @@ export default function DashboardClient({ isAdmin }: { isAdmin?: boolean }) {
         hasSummary.current = true;
         setLastSynced(new Date());
         setError(null);
+        try {
+          window.localStorage.setItem(DASHBOARD_STORAGE_KEY, JSON.stringify({ savedAt: Date.now(), data }));
+        } catch {
+          // Browser storage is only a stale-data convenience, never a requirement.
+        }
       }
     } catch (err: unknown) {
       if (isMounted.current && !hasSummary.current) {
@@ -65,7 +71,23 @@ export default function DashboardClient({ isAdmin }: { isAdmin?: boolean }) {
 
   useEffect(() => {
     isMounted.current = true;
-    const initialLoad = window.setTimeout(() => { void refreshSummary(); }, 0);
+    const initialLoad = window.setTimeout(() => {
+      try {
+        const stored = window.localStorage.getItem(DASHBOARD_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed?.data?.totalOrders !== undefined && isMounted.current) {
+            setSummary(parsed.data);
+            hasSummary.current = true;
+            setLoading(false);
+            setLastSynced(new Date(Number(parsed.savedAt) || Date.now()));
+          }
+        }
+      } catch {
+        // Ignore malformed/blocked browser storage and use the live request.
+      }
+      void refreshSummary();
+    }, 0);
     const interval = window.setInterval(refreshSummary, 5000);
 
     return () => {

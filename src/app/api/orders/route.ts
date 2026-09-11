@@ -25,14 +25,14 @@ function isCashOrder(rawOrder: any): boolean {
 // (the source of truth) rather than trusting a client-supplied value, so a
 // member can't just lie about the method to verify a cash payment.
 async function fetchOrderPaymentMethod(orderId: string): Promise<"UPI" | "CASH" | null> {
-  const response = await fetch(withToken(`${APPS_SCRIPT_URL}?action=getOrders`), {
+  const response = await fetch(withToken(`${APPS_SCRIPT_URL}?action=getOrder&ref=${encodeURIComponent(orderId)}`), {
     method: "GET",
     cache: "no-store",
   });
   if (!response.ok) return null;
   const data = await response.json();
-  const match = (data?.data || []).find((o: any) => o?.["Order ID"] === orderId);
-  if (!match) return null;
+  if (!data?.success || !data.data) return null;
+  const match = data.data;
   return isCashOrder(match) ? "CASH" : "UPI";
 }
 
@@ -55,8 +55,13 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const action = searchParams.get("action") || "getOrders";
+    const upstreamParams = new URLSearchParams({ action });
+    if (action === "getOrder") {
+      const reference = searchParams.get("ref") || searchParams.get("orderId") || searchParams.get("token");
+      if (reference) upstreamParams.set("ref", reference);
+    }
 
-    const response = await fetch(withToken(`${APPS_SCRIPT_URL}?action=${encodeURIComponent(action)}`), {
+    const response = await fetch(withToken(`${APPS_SCRIPT_URL}?${upstreamParams.toString()}`), {
       method: "GET",
       cache: "no-store",
     });

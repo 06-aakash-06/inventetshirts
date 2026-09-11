@@ -2,8 +2,8 @@ const SHEET_NAME = "Form Responses 1"; // Make sure to adjust if your sheet name
 const ORDERS_CACHE_META_KEY = "INVENTE_ORDERS_V3_META";
 const ORDERS_CACHE_CHUNK_PREFIX = "INVENTE_ORDERS_V3_CHUNK_";
 const DASHBOARD_CACHE_KEY = "INVENTE_DASHBOARD_V1";
-const CACHE_TIME = 10; // Short cache; Sheet writes invalidate order chunks.
-const DASHBOARD_CACHE_TIME = 10; // Dashboard counts may lag writes by at most this burst window.
+const CACHE_TIME = 300; // Sheet writes invalidate order chunks, so keep read bursts warm for five minutes.
+const DASHBOARD_CACHE_TIME = 60; // Active dashboards refresh this lease; writes update the cached counters.
 const CACHE_CHUNK_CHARS = 30000; // Keep every CacheService value safely below its per-value limit.
 const LOCK_WAIT_MS = 30000; // Allow a busy distribution line to drain instead of failing at 10s.
 const EMAIL_CLAIM_TTL_MS = 120000; // Stale email claims expire after two minutes.
@@ -202,6 +202,28 @@ function findRowIndex_(values, orderIdColumn, orderId) {
   return -1;
 }
 
+// Fast read-only lookup for the distribution screen and normal updates. The
+// full data range remains the safe fallback for rows whose Order ID has not
+// been persisted by the form-submit trigger yet.
+function findRowByColumnValue_(sheet, columnIndex, value) {
+  const wanted = normalizedText_(value);
+  const lastRow = sheet.getLastRow();
+  if (columnIndex < 0 || !wanted || lastRow < 2) return -1;
+
+  try {
+    const match = sheet.getRange(2, columnIndex + 1, lastRow - 1, 1)
+      .createTextFinder(wanted)
+      .matchCase(false)
+      .matchEntireCell(true)
+      .useRegularExpression(false)
+      .findNext();
+    return match ? match.getRow() : -1;
+  } catch (err) {
+    Logger.log("Fast row lookup skipped: " + String((err && err.message) || err));
+    return -1;
+  }
+}
+
 // Same deterministic ID calculation used by getOrdersFromSheet(), but purely
 // in memory. This lets a just-submitted row be updated before its installable
 // form-submit trigger runs without writing or repairing any other Sheet row.
@@ -301,10 +323,25 @@ function doGet(e) {
     }
   }
 
+  if (action === "getOrder") {
+    const reference = e.parameter.ref || e.parameter.orderId || e.parameter.token || "";
+    try {
+      const data = getOrderFromSheet_(reference);
+      return jsonResponse_({ success: true, data: data });
+    } catch (error) {
+      return jsonResponse_({ success: false, error: error.toString() });
+    }
+  }
+
   if (action === "getDashboardSummary") {
     if (!noCache) {
       const cachedSummary = cachedDashboardSummary_();
-      if (cachedSummary) return textJsonResponse_(cachedSummary);
+      if (cachedSummary) {
+        // CacheService expiration is fixed from the last put. Refresh the
+        // small summary lease while a dashboard is actively polling.
+        cacheDashboardSummary_(cachedSummary);
+        return textJsonResponse_(cachedSummary);
+      }
 
       // If the full order cache is warm, derive the small dashboard response
       // without touching Google Sheets again.
@@ -325,9 +362,9 @@ function doGet(e) {
 
     try {
       const data = getOrdersFromSheet();
-      // Warm both caches from this one Sheet read. The dashboard gets a small
-      // response, while the Orders/Collection pages can reuse the chunks.
-      cacheOrders_(JSON.stringify({ success: true, data: data }));
+      // Keep this path small. Do not serialize/cache the full order list before
+      // returning the dashboard response; the Orders page has its own cache
+      // fill path.
       const summaryJson = JSON.stringify({ success: true, data: buildDashboardSummary_(data) });
       cacheDashboardSummary_(summaryJson);
       return textJsonResponse_(summaryJson);
@@ -412,12 +449,16 @@ function doPost(e) {
       orderId = verified;
     }
 
-    let dataValues = sheet.getDataRange().getValues();
-    let targetRowIndex = findRowIndex_(dataValues, orderIdColIdx - 1, orderId);
+    let dataValues = null;
+    let targetRowIndex = findRowByColumnValue_(sheet, orderIdColIdx - 1, orderId);
 
     // If the form-submit trigger is still pending, resolve its deterministic ID
     // in memory. This deliberately does not repair or modify any other Sheet
     // row during a distribution request.
+    if (targetRowIndex === -1) {
+      dataValues = sheet.getDataRange().getValues();
+      targetRowIndex = findRowIndex_(dataValues, orderIdColIdx - 1, orderId);
+    }
     if (targetRowIndex === -1) {
       targetRowIndex = findEffectiveRowIndex_(dataValues, headers, orderId);
     }
@@ -425,12 +466,15 @@ function doPost(e) {
     if (targetRowIndex === -1) {
       throw new Error("Order not found");
     }
-    if (!normalizedText_(dataValues[targetRowIndex - 1][orderIdColIdx - 1])) {
+    const targetRow = dataValues
+      ? dataValues[targetRowIndex - 1]
+      : sheet.getRange(targetRowIndex, 1, 1, sheet.getLastColumn()).getValues()[0];
+    if (!normalizedText_(targetRow[orderIdColIdx - 1])) {
       // Only the in-memory response/validation row receives the effective ID.
       // The installable form-submit trigger remains the only persistence path.
-      dataValues[targetRowIndex - 1][orderIdColIdx - 1] = orderId;
+      targetRow[orderIdColIdx - 1] = orderId;
     }
-    const targetRow = dataValues[targetRowIndex - 1];
+    const previousOrder = rowToObject(targetRow, headers, targetRowIndex);
     const col = function (name) { return headers.indexOf(name); };
 
     if (action === "updatePayment") {
@@ -532,6 +576,7 @@ function doPost(e) {
       updatedRow[orderIdColIdx - 1] = orderId;
     }
     const updatedOrder = rowToObject(updatedRow, headers, targetRowIndex);
+    updateDashboardSummaryCache_(previousOrder, updatedOrder);
 
     return jsonResponse_({ success: true, data: updatedOrder });
 
@@ -668,6 +713,53 @@ function getOrdersFromSheet() {
   return orders;
 }
 
+// Pure read for one scanned/manual reference. TextFinder keeps normal QR
+// lookups to one narrow column and one row read instead of loading every order.
+// The full-range fallback preserves support for pending form-submit IDs and
+// manual identifiers when a fast column lookup cannot find a match.
+function getOrderFromSheet_(reference) {
+  const rawReference = normalizedText_(reference);
+  if (!rawReference) throw new Error("Order reference is required");
+
+  let lookup = rawReference;
+  if (rawReference.indexOf(".") !== -1) {
+    lookup = verifyTicketToken_(rawReference);
+    if (!lookup) throw new Error("Invalid ticket signature");
+  }
+
+  const sheet = getSheet();
+  const headers = readHeaders_(sheet);
+  const columnAliases = [
+    ["Order ID"],
+    ["Register Number", "Reg No"],
+    ["Digital ID"],
+    ["Phone Number"]
+  ];
+  let rowNumber = -1;
+
+  for (let i = 0; i < columnAliases.length && rowNumber === -1; i++) {
+    const columnIndex = findHeaderIndex_(headers, columnAliases[i]);
+    rowNumber = findRowByColumnValue_(sheet, columnIndex, lookup);
+  }
+
+  if (rowNumber === -1) {
+    const values = sheet.getDataRange().getValues();
+    const orderIdColumn = headers.indexOf("Order ID");
+    rowNumber = findRowIndex_(values, orderIdColumn, lookup);
+    if (rowNumber === -1) {
+      for (let i = 1; i < columnAliases.length && rowNumber === -1; i++) {
+        const columnIndex = findHeaderIndex_(headers, columnAliases[i]);
+        rowNumber = findRowIndex_(values, columnIndex, lookup);
+      }
+    }
+    if (rowNumber === -1) rowNumber = findEffectiveRowIndex_(values, headers, lookup);
+  }
+
+  if (rowNumber === -1) throw new Error("Order not found");
+  const row = sheet.getRange(rowNumber, 1, 1, sheet.getLastColumn()).getValues()[0];
+  return rowToObject(row, headers, rowNumber);
+}
+
 function buildDashboardSummary_(orders) {
   const summary = {
     totalOrders: orders.length,
@@ -722,6 +814,62 @@ function buildDashboardSummary_(orders) {
   });
   summary.activities = summary.activities.slice(0, 10);
   return summary;
+}
+
+// Update an already-warm dashboard snapshot from an authoritative mutation
+// response. This avoids forcing the next dashboard poll to rescan the Sheet.
+// If there is no dashboard snapshot, there is nothing to update.
+function updateDashboardSummaryCache_(beforeOrder, afterOrder) {
+  const cachedSummary = cachedDashboardSummary_();
+  if (!cachedSummary) return;
+
+  try {
+    const parsed = JSON.parse(cachedSummary);
+    if (!parsed || !parsed.data) return;
+
+    const before = buildDashboardSummary_([beforeOrder]);
+    const after = buildDashboardSummary_([afterOrder]);
+    const summary = parsed.data;
+    ["paidOrders", "collectedOrders", "paidNoQrOrders", "upiOrders", "cashOrders"].forEach(function (key) {
+      summary[key] += after[key] - before[key];
+    });
+
+    Object.keys(before.sizes).forEach(function (size) {
+      summary.sizes[size] = (summary.sizes[size] || 0) - before.sizes[size];
+      if (summary.sizes[size] <= 0) delete summary.sizes[size];
+    });
+    Object.keys(after.sizes).forEach(function (size) {
+      summary.sizes[size] = (summary.sizes[size] || 0) + after.sizes[size];
+    });
+
+    const orderId = normalizedText_(afterOrder["Order ID"]);
+    summary.activities = (summary.activities || []).filter(function (activity) {
+      return activity.orderId !== orderId;
+    }).concat(after.activities);
+    summary.activities.sort(function (a, b) {
+      const right = Date.parse(b.timestamp);
+      const left = Date.parse(a.timestamp);
+      return (isNaN(right) ? 0 : right) - (isNaN(left) ? 0 : left);
+    });
+    summary.activities = summary.activities.slice(0, 10);
+    cacheDashboardSummary_(JSON.stringify({ success: true, data: summary }));
+  } catch (err) {
+    Logger.log("Dashboard summary update skipped: " + String((err && err.message) || err));
+  }
+}
+
+function markDashboardQrSent_() {
+  const cachedSummary = cachedDashboardSummary_();
+  if (!cachedSummary) return;
+
+  try {
+    const parsed = JSON.parse(cachedSummary);
+    if (!parsed || !parsed.data) return;
+    parsed.data.paidNoQrOrders = Math.max(0, Number(parsed.data.paidNoQrOrders || 0) - 1);
+    cacheDashboardSummary_(JSON.stringify(parsed));
+  } catch (err) {
+    Logger.log("Dashboard QR counter update skipped: " + String((err && err.message) || err));
+  }
 }
 
 function rowToObject(row, headers, rowIndex) {
@@ -868,11 +1016,16 @@ function handleSendSingleQr(orderId) {
     const paymentStatusCol = headers.indexOf("Payment Status");
     const orderIdCol = headers.indexOf("Order ID");
 
-    const values = sheet.getDataRange().getValues();
-    rowNumber = findRowIndex_(values, orderIdCol, orderId);
-    if (rowNumber === -1) throw new Error("Order not found");
-
-    const row = values[rowNumber - 1];
+    rowNumber = findRowByColumnValue_(sheet, orderIdCol, orderId);
+    let row;
+    if (rowNumber === -1) {
+      const values = sheet.getDataRange().getValues();
+      rowNumber = findRowIndex_(values, orderIdCol, orderId);
+      if (rowNumber === -1) throw new Error("Order not found");
+      row = values[rowNumber - 1];
+    } else {
+      row = sheet.getRange(rowNumber, 1, 1, sheet.getLastColumn()).getValues()[0];
+    }
     if (row[paymentStatusCol] !== "PAID") throw new Error("Payment is not verified for this order");
 
     order = readOrderForEmail_(sheet, headers, row, rowNumber);
@@ -903,6 +1056,7 @@ function handleSendSingleQr(orderId) {
         finalizeLockAcquired = true;
         markQrSent_(sheet, rowNumber, qrSentColIdx);
         invalidateOrdersCache_();
+        if (!hadQrSent) markDashboardQrSent_();
       } finally {
         if (finalizeLockAcquired) lock.releaseLock();
       }
@@ -993,6 +1147,7 @@ function handleSendQrTickets() {
           lock.waitLock(LOCK_WAIT_MS);
           finalizeLockAcquired = true;
           markQrSent_(sheet, order.rowIndex, qrSentColIdx);
+          markDashboardQrSent_();
         } finally {
           if (finalizeLockAcquired) lock.releaseLock();
         }
