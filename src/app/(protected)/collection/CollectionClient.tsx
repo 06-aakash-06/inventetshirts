@@ -23,11 +23,13 @@ export default function CollectionClient({ userName }: { userName: string }) {
   const [matchedOrder, setMatchedOrder] = useState<Order | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
+  const [lookupRequested, setLookupRequested] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [confirmGive, setConfirmGive] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const lookupRequestRef = useRef(0);
+  const lookupAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     document.title = "Distribution · INVENTE 11.0";
@@ -66,11 +68,11 @@ export default function CollectionClient({ userName }: { userName: string }) {
     };
   }, [isScanning, toast]);
 
-  const lookupOrder = useCallback(async (reference: string, requestId: number) => {
+  const lookupOrder = useCallback(async (reference: string, requestId: number, signal: AbortSignal) => {
     setLookupLoading(true);
     setLookupError(null);
     try {
-      const order = await getOrder(reference);
+      const order = await getOrder(reference, signal);
       if (lookupRequestRef.current !== requestId) return;
       setMatchedOrder(order);
     } catch (err: unknown) {
@@ -82,18 +84,33 @@ export default function CollectionClient({ userName }: { userName: string }) {
     }
   }, []);
 
-  useEffect(() => {
-    const reference = scanToken || search.trim();
+  const requestLookup = useCallback((value: string) => {
+    const reference = value.trim();
+    lookupAbortRef.current?.abort();
     const requestId = ++lookupRequestRef.current;
     if (reference.length < 3) {
+      setLookupRequested(false);
+      setLookupLoading(false);
+      setMatchedOrder(null);
+      setLookupError(null);
       return;
     }
 
-    const timer = window.setTimeout(() => {
-      void lookupOrder(reference, requestId);
-    }, 200);
-    return () => window.clearTimeout(timer);
-  }, [search, scanToken, lookupOrder]);
+    const controller = new AbortController();
+    lookupAbortRef.current = controller;
+    setLookupRequested(true);
+    setMatchedOrder(null);
+    setLookupError(null);
+    void lookupOrder(reference, requestId, controller.signal);
+  }, [lookupOrder]);
+
+  // QR scans should resolve immediately. Manual searches are submitted with
+  // Enter so normal typing cannot create a request for every partial ID.
+  useEffect(() => {
+    if (scanToken) requestLookup(scanToken);
+  }, [scanToken, requestLookup]);
+
+  useEffect(() => () => lookupAbortRef.current?.abort(), []);
 
   const paid = matchedOrder?.["Payment Status"] === "PAID";
   const qrSent = !!matchedOrder?.["QR Sent"];
@@ -107,11 +124,14 @@ export default function CollectionClient({ userName }: { userName: string }) {
     : null;
 
   const reset = () => {
+    lookupAbortRef.current?.abort();
+    lookupRequestRef.current += 1;
     setSearch("");
     setScanToken(null);
     setMatchedOrder(null);
     setLookupError(null);
     setLookupLoading(false);
+    setLookupRequested(false);
   };
 
   const setCollection = async (status: "COLLECTED" | "NOT_COLLECTED", ref: { orderId: string; token?: string }) => {
@@ -123,7 +143,7 @@ export default function CollectionClient({ userName }: { userName: string }) {
     if (res?.success && res.data) {
       setMatchedOrder(prev => prev ? { ...prev, ...res.data } : res.data);
     } else if (res?.success) {
-      void lookupOrder(ref.orderId, lookupRequestRef.current);
+      requestLookup(ref.orderId);
     }
     return res;
   };
@@ -177,14 +197,23 @@ export default function CollectionClient({ userName }: { userName: string }) {
           autoFocus
           aria-label="Scan or type an order ID or register number"
           className="flex-1 text-xl md:text-2xl p-4 md:p-6 font-black tracking-tighter bg-transparent border-r-2 border-b-2 border-border focus:outline-none focus-visible:ring-2 focus-visible:ring-primary uppercase placeholder:text-muted-foreground"
-          placeholder="Scan or type ID..."
+          placeholder="Type ID and press Enter..."
           value={search}
           onChange={(e) => {
+            lookupAbortRef.current?.abort();
+            lookupRequestRef.current += 1;
             setSearch(e.target.value);
             setScanToken(null);
             setMatchedOrder(null);
             setLookupError(null);
             setLookupLoading(false);
+            setLookupRequested(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              requestLookup(e.currentTarget.value);
+            }
           }}
         />
         <button
@@ -209,13 +238,19 @@ export default function CollectionClient({ userName }: { userName: string }) {
         </div>
       )}
 
-      {search.length >= 3 && lookupLoading && (
+      {search.trim().length >= 3 && !lookupRequested && !scanToken && (
+        <div className="p-4 sm:p-8 border-2 border-border bg-muted text-muted-foreground text-center font-black uppercase tracking-widest text-lg sm:text-xl mb-8 sm:mb-12">
+          Press Enter to look up this ID
+        </div>
+      )}
+
+      {lookupRequested && lookupLoading && (
         <div className="p-4 sm:p-8 border-2 border-border bg-muted text-muted-foreground text-center font-black uppercase tracking-widest text-lg sm:text-xl mb-8 sm:mb-12">
           Looking up order...
         </div>
       )}
 
-      {search.length >= 3 && !lookupLoading && !matchedOrder && (
+      {lookupRequested && !lookupLoading && !matchedOrder && (
         <div className="p-4 sm:p-8 border-2 border-destructive bg-destructive/10 text-destructive text-center font-black uppercase tracking-widest text-lg sm:text-xl mb-8 sm:mb-12">
           {lookupError || "No matching order for that exact ID / register number"}
         </div>

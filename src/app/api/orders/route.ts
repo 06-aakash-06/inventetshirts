@@ -64,6 +64,7 @@ export async function GET(request: Request) {
     const response = await fetch(withToken(`${APPS_SCRIPT_URL}?${upstreamParams.toString()}`), {
       method: "GET",
       cache: "no-store",
+      signal: request.signal,
     });
 
     if (!response.ok) {

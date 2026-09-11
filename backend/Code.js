@@ -67,17 +67,41 @@ function cachedOrders_() {
     const count = Number(parsed && parsed.count);
     if (!version || !count || count < 1 || count > 1000) return null;
 
-    const chunks = [];
+    const keys = [];
     for (let i = 0; i < count; i++) {
-      const chunk = cache.get(ordersCacheChunkKey_(version, i));
-      if (chunk === null || chunk === undefined) return null;
-      chunks.push(chunk);
+      keys.push(ordersCacheChunkKey_(version, i));
     }
+    const cachedChunks = cache.getAll(keys);
+    const chunks = keys.map(function (key) {
+      return cachedChunks[key];
+    });
+    if (chunks.some(function (chunk) { return chunk === null || chunk === undefined; })) return null;
     return chunks.join("");
   } catch (err) {
     Logger.log("Orders cache read skipped: " + String((err && err.message) || err));
     return null;
   }
+}
+
+function findOrderInCachedJson_(json, lookup) {
+  if (!json) return null;
+  const wanted = normalizedText_(lookup);
+  if (!wanted) return null;
+
+  try {
+    const parsed = JSON.parse(json);
+    const orders = parsed && Array.isArray(parsed.data) ? parsed.data : [];
+    const keys = ["Order ID", "Register Number", "Digital ID", "Phone Number"];
+    for (let i = 0; i < orders.length; i++) {
+      const order = orders[i];
+      for (let k = 0; k < keys.length; k++) {
+        if (normalizedText_(order[keys[k]]) === wanted) return order;
+      }
+    }
+  } catch (err) {
+    Logger.log("Cached order lookup skipped: " + String((err && err.message) || err));
+  }
+  return null;
 }
 
 function cacheOrders_(value) {
@@ -205,9 +229,9 @@ function findRowIndex_(values, orderIdColumn, orderId) {
 // Fast read-only lookup for the distribution screen and normal updates. The
 // full data range remains the safe fallback for rows whose Order ID has not
 // been persisted by the form-submit trigger yet.
-function findRowByColumnValue_(sheet, columnIndex, value) {
+function findRowByColumnValue_(sheet, columnIndex, value, providedLastRow) {
   const wanted = normalizedText_(value);
-  const lastRow = sheet.getLastRow();
+  const lastRow = typeof providedLastRow === "number" ? providedLastRow : sheet.getLastRow();
   if (columnIndex < 0 || !wanted || lastRow < 2) return -1;
 
   try {
@@ -220,6 +244,46 @@ function findRowByColumnValue_(sheet, columnIndex, value) {
     return match ? match.getRow() : -1;
   } catch (err) {
     Logger.log("Fast row lookup skipped: " + String((err && err.message) || err));
+    return -1;
+  }
+}
+
+// Search all relevant identifier columns in one TextFinder operation. This is
+// materially faster than doing one Sheet service search per identifier column,
+// especially for register/digital IDs that are not found in the first column.
+function findRowByAnyColumnValue_(sheet, columnIndices, value) {
+  const wanted = normalizedText_(value);
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+  if (!wanted || lastRow < 2 || lastColumn < 1) return -1;
+
+  const priorityByColumn = {};
+  columnIndices.forEach(function (columnIndex, priority) {
+    if (columnIndex >= 0 && priorityByColumn[columnIndex] === undefined) {
+      priorityByColumn[columnIndex] = priority;
+    }
+  });
+
+  try {
+    const matches = sheet.getRange(2, 1, lastRow - 1, lastColumn)
+      .createTextFinder(wanted)
+      .matchCase(false)
+      .matchEntireCell(true)
+      .useRegularExpression(false)
+      .findAll();
+    let best = null;
+    matches.forEach(function (match) {
+      const columnIndex = match.getColumn() - 1;
+      const priority = priorityByColumn[columnIndex];
+      if (priority === undefined) return;
+      const row = match.getRow();
+      if (!best || priority < best.priority || (priority === best.priority && row < best.row)) {
+        best = { priority: priority, row: row };
+      }
+    });
+    return best ? best.row : -1;
+  } catch (err) {
+    Logger.log("Multi-column lookup skipped: " + String((err && err.message) || err));
     return -1;
   }
 }
@@ -735,11 +799,24 @@ function getOrderFromSheet_(reference) {
     ["Digital ID"],
     ["Phone Number"]
   ];
+  const columnIndices = columnAliases.map(function (aliases) {
+    return findHeaderIndex_(headers, aliases);
+  });
+
+  // Orders already fetched by the Orders page are shared in Script Cache.
+  // Reuse that snapshot for distribution when available; writes invalidate it
+  // before returning, so the Sheet remains authoritative for mutations.
+  const cachedOrder = findOrderInCachedJson_(cachedOrders_(), lookup);
+  if (cachedOrder) return cachedOrder;
+
   let rowNumber = -1;
 
-  for (let i = 0; i < columnAliases.length && rowNumber === -1; i++) {
-    const columnIndex = findHeaderIndex_(headers, columnAliases[i]);
-    rowNumber = findRowByColumnValue_(sheet, columnIndex, lookup);
+  // Generated order IDs are the common QR/manual path. Keep this as the
+  // narrowest possible search; other identifiers use one multi-column search.
+  if (/^INV-/i.test(lookup) && columnIndices[0] !== -1) {
+    rowNumber = findRowByColumnValue_(sheet, columnIndices[0], lookup);
+  } else {
+    rowNumber = findRowByAnyColumnValue_(sheet, columnIndices, lookup);
   }
 
   if (rowNumber === -1) {
@@ -747,9 +824,8 @@ function getOrderFromSheet_(reference) {
     const orderIdColumn = headers.indexOf("Order ID");
     rowNumber = findRowIndex_(values, orderIdColumn, lookup);
     if (rowNumber === -1) {
-      for (let i = 1; i < columnAliases.length && rowNumber === -1; i++) {
-        const columnIndex = findHeaderIndex_(headers, columnAliases[i]);
-        rowNumber = findRowIndex_(values, columnIndex, lookup);
+      for (let i = 0; i < columnIndices.length && rowNumber === -1; i++) {
+        rowNumber = findRowIndex_(values, columnIndices[i], lookup);
       }
     }
     if (rowNumber === -1) rowNumber = findEffectiveRowIndex_(values, headers, lookup);

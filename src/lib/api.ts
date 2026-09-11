@@ -23,11 +23,18 @@ export interface Order {
 
 const API_URL = "/api/orders";
 const READ_TIMEOUT_MS = 20000;
+const ORDER_LOOKUP_TIMEOUT_MS = 10000;
 type RawOrder = Record<string, unknown>;
 
 async function fetchJsonWithTimeout(url: string, options: RequestInit = {}, timeoutMs = READ_TIMEOUT_MS) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const callerSignal = options.signal;
+  const abortFromCaller = () => controller.abort();
+  if (callerSignal) {
+    if (callerSignal.aborted) controller.abort();
+    else callerSignal.addEventListener("abort", abortFromCaller, { once: true });
+  }
 
   try {
     const response = await fetch(url, { ...options, signal: controller.signal });
@@ -40,6 +47,7 @@ async function fetchJsonWithTimeout(url: string, options: RequestInit = {}, time
     throw error;
   } finally {
     clearTimeout(timeout);
+    callerSignal?.removeEventListener("abort", abortFromCaller);
   }
 }
 
@@ -90,11 +98,12 @@ export async function getOrders(): Promise<Order[]> {
   }
 }
 
-export async function getOrder(reference: string): Promise<Order> {
+export async function getOrder(reference: string, signal?: AbortSignal): Promise<Order> {
   const data = await fetchJsonWithTimeout(`${API_URL}?action=getOrder&ref=${encodeURIComponent(reference)}`, {
     method: "GET",
     cache: "no-store",
-  });
+    signal,
+  }, ORDER_LOOKUP_TIMEOUT_MS);
   if (!data.success) throw new Error(data.error || "Order not found");
   return normalizeOrder(data.data as RawOrder);
 }
