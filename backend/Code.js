@@ -1,7 +1,10 @@
-const CACHE_KEY = "INVENTE_ORDERS_V2";
 const SHEET_NAME = "Form Responses 1"; // Make sure to adjust if your sheet name is different
-const CACHE_TIME = 5; // Short burst cache; every write/form submit invalidates it.
-const CACHE_MAX_CHARS = 90000; // Leave headroom below CacheService's per-value limit.
+const ORDERS_CACHE_META_KEY = "INVENTE_ORDERS_V3_META";
+const ORDERS_CACHE_CHUNK_PREFIX = "INVENTE_ORDERS_V3_CHUNK_";
+const DASHBOARD_CACHE_KEY = "INVENTE_DASHBOARD_V1";
+const CACHE_TIME = 10; // Short cache; Sheet writes invalidate order chunks.
+const DASHBOARD_CACHE_TIME = 10; // Dashboard counts may lag writes by at most this burst window.
+const CACHE_CHUNK_CHARS = 30000; // Keep every CacheService value safely below its per-value limit.
 const LOCK_WAIT_MS = 30000; // Allow a busy distribution line to drain instead of failing at 10s.
 const EMAIL_CLAIM_TTL_MS = 120000; // Stale email claims expire after two minutes.
 const EMAIL_CLAIM_PREFIX = "INVENTE_EMAIL_CLAIM_V1_";
@@ -49,9 +52,28 @@ function verifyTicketToken_(token) {
 // ---------------------------------------------------------------------------
 // CacheService is only an optimization. A cache failure must never prevent a
 // successful Sheet read or write from being returned to the web app.
+function ordersCacheChunkKey_(version, index) {
+  return ORDERS_CACHE_CHUNK_PREFIX + version + "_" + index;
+}
+
 function cachedOrders_() {
   try {
-    return CacheService.getScriptCache().get(CACHE_KEY);
+    const cache = CacheService.getScriptCache();
+    const metadata = cache.get(ORDERS_CACHE_META_KEY);
+    if (!metadata) return null;
+
+    const parsed = JSON.parse(metadata);
+    const version = String(parsed && parsed.version || "");
+    const count = Number(parsed && parsed.count);
+    if (!version || !count || count < 1 || count > 1000) return null;
+
+    const chunks = [];
+    for (let i = 0; i < count; i++) {
+      const chunk = cache.get(ordersCacheChunkKey_(version, i));
+      if (chunk === null || chunk === undefined) return null;
+      chunks.push(chunk);
+    }
+    return chunks.join("");
   } catch (err) {
     Logger.log("Orders cache read skipped: " + String((err && err.message) || err));
     return null;
@@ -59,15 +81,23 @@ function cachedOrders_() {
 }
 
 function cacheOrders_(value) {
-  // Avoid even calling CacheService for a value that is close to its documented
-  // per-entry limit. The catch remains as a final safety net for encoding/limit
-  // differences inside Apps Script.
-  if (!value || value.length > CACHE_MAX_CHARS) {
-    Logger.log("Orders cache skipped because the response is too large: " + (value ? value.length : 0) + " characters");
+  if (!value) return;
+
+  const count = Math.ceil(value.length / CACHE_CHUNK_CHARS);
+  if (!count || count > 1000) {
+    Logger.log("Orders cache skipped because the response has too many chunks: " + count);
     return;
   }
+
   try {
-    CacheService.getScriptCache().put(CACHE_KEY, value, CACHE_TIME);
+    const cache = CacheService.getScriptCache();
+    const version = String(Date.now()) + "_" + String(Math.floor(Math.random() * 1000000));
+    // Publish metadata last. A reader continues using the previous complete
+    // version while this new version is being written.
+    for (let i = 0; i < count; i++) {
+      cache.put(ordersCacheChunkKey_(version, i), value.substring(i * CACHE_CHUNK_CHARS, (i + 1) * CACHE_CHUNK_CHARS), CACHE_TIME);
+    }
+    cache.put(ORDERS_CACHE_META_KEY, JSON.stringify({ version: version, count: count }), CACHE_TIME);
   } catch (err) {
     Logger.log("Orders cache write skipped: " + String((err && err.message) || err));
   }
@@ -75,9 +105,37 @@ function cacheOrders_(value) {
 
 function invalidateOrdersCache_() {
   try {
-    CacheService.getScriptCache().remove(CACHE_KEY);
+    // Removing the metadata makes every old version unreachable. Chunks expire
+    // naturally, and versioned keys prevent concurrent fills from mixing data.
+    CacheService.getScriptCache().remove(ORDERS_CACHE_META_KEY);
   } catch (err) {
     Logger.log("Orders cache invalidation skipped: " + String((err && err.message) || err));
+  }
+}
+
+function cachedDashboardSummary_() {
+  try {
+    return CacheService.getScriptCache().get(DASHBOARD_CACHE_KEY);
+  } catch (err) {
+    Logger.log("Dashboard cache read skipped: " + String((err && err.message) || err));
+    return null;
+  }
+}
+
+function cacheDashboardSummary_(value) {
+  if (!value) return;
+  try {
+    CacheService.getScriptCache().put(DASHBOARD_CACHE_KEY, value, DASHBOARD_CACHE_TIME);
+  } catch (err) {
+    Logger.log("Dashboard cache write skipped: " + String((err && err.message) || err));
+  }
+}
+
+function invalidateDashboardSummary_() {
+  try {
+    CacheService.getScriptCache().remove(DASHBOARD_CACHE_KEY);
+  } catch (err) {
+    Logger.log("Dashboard cache invalidation skipped: " + String((err && err.message) || err));
   }
 }
 
@@ -240,6 +298,41 @@ function doGet(e) {
     } catch (err) {
       // Thrown when the deployment has not been authorized for mail scope yet.
       return ContentService.createTextOutput(JSON.stringify({ success: false, error: String((err && err.message) || err) })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  if (action === "getDashboardSummary") {
+    if (!noCache) {
+      const cachedSummary = cachedDashboardSummary_();
+      if (cachedSummary) return textJsonResponse_(cachedSummary);
+
+      // If the full order cache is warm, derive the small dashboard response
+      // without touching Google Sheets again.
+      const cachedData = cachedOrders_();
+      if (cachedData) {
+        try {
+          const parsed = JSON.parse(cachedData);
+          if (parsed && Array.isArray(parsed.data)) {
+            const summaryJson = JSON.stringify({ success: true, data: buildDashboardSummary_(parsed.data) });
+            cacheDashboardSummary_(summaryJson);
+            return textJsonResponse_(summaryJson);
+          }
+        } catch (err) {
+          Logger.log("Dashboard summary from orders cache skipped: " + String((err && err.message) || err));
+        }
+      }
+    }
+
+    try {
+      const data = getOrdersFromSheet();
+      // Warm both caches from this one Sheet read. The dashboard gets a small
+      // response, while the Orders/Collection pages can reuse the chunks.
+      cacheOrders_(JSON.stringify({ success: true, data: data }));
+      const summaryJson = JSON.stringify({ success: true, data: buildDashboardSummary_(data) });
+      cacheDashboardSummary_(summaryJson);
+      return textJsonResponse_(summaryJson);
+    } catch (error) {
+      return jsonResponse_({ success: false, error: error.toString() });
     }
   }
 
@@ -575,6 +668,62 @@ function getOrdersFromSheet() {
   return orders;
 }
 
+function buildDashboardSummary_(orders) {
+  const summary = {
+    totalOrders: orders.length,
+    paidOrders: 0,
+    collectedOrders: 0,
+    paidNoQrOrders: 0,
+    upiOrders: 0,
+    cashOrders: 0,
+    sizes: {},
+    activities: []
+  };
+
+  orders.forEach(function (order) {
+    const paymentStatus = normalizedText_(order["Payment Status"]).toUpperCase();
+    const collectionStatus = normalizedText_(order["Collection Status"]).toUpperCase();
+    const paymentMethod = normalizedText_(order["Payment Method"]).toUpperCase();
+    const size = normalizedText_(order["T-Shirt Size"]) || "Unknown";
+
+    if (paymentStatus === "PAID") summary.paidOrders++;
+    if (collectionStatus === "COLLECTED") summary.collectedOrders++;
+    if (paymentStatus === "PAID" && !isTrue_(order["QR Sent"])) summary.paidNoQrOrders++;
+    if (paymentMethod === "UPI") summary.upiOrders++;
+    else summary.cashOrders++;
+    summary.sizes[size] = (summary.sizes[size] || 0) + 1;
+
+    if (order["Payment Verified At"] && order["Payment Verified By"]) {
+      summary.activities.push({
+        id: order["Order ID"] + "-payment",
+        type: "payment",
+        orderId: order["Order ID"],
+        timestamp: order["Payment Verified At"],
+        user: order["Payment Verified By"],
+        description: "verified payment for " + order["Order ID"]
+      });
+    }
+    if (order["Collected At"] && order["Collector"]) {
+      summary.activities.push({
+        id: order["Order ID"] + "-collection",
+        type: "collection",
+        orderId: order["Order ID"],
+        timestamp: order["Collected At"],
+        user: order["Collector"],
+        description: "gave T-shirt for " + order["Order ID"]
+      });
+    }
+  });
+
+  summary.activities.sort(function (a, b) {
+    const right = Date.parse(b.timestamp);
+    const left = Date.parse(a.timestamp);
+    return (isNaN(right) ? 0 : right) - (isNaN(left) ? 0 : left);
+  });
+  summary.activities = summary.activities.slice(0, 10);
+  return summary;
+}
+
 function rowToObject(row, headers, rowIndex) {
   const paymentMethod = normalizedText_(valueForHeaders_(row, headers, ["Payment Method - Rs. 300", "Payment Method"]));
 
@@ -623,11 +772,13 @@ function onFormSubmit(e) {
   } finally {
     if (lockAcquired) lock.releaseLock();
     invalidateOrdersCache_();
+    invalidateDashboardSummary_();
   }
 }
 
 function onEdit(e) {
   invalidateOrdersCache_();
+  invalidateDashboardSummary_();
 }
 
 // ---------------------------------------------------------------------------

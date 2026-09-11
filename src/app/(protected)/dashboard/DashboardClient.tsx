@@ -1,7 +1,6 @@
 "use client"
-import { useState, useEffect, useCallback } from "react";
-import { useOrders } from "@/context/OrdersContext";
-import { sendQrTicketsBatch, getEmailQuota } from "@/lib/api";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { DashboardSummary, getDashboardSummary, sendQrTicketsBatch, getEmailQuota } from "@/lib/api";
 import { useToast, useConfirm } from "@/components/ui/toast";
 
 const pct = (value: number, target: number) => Math.min(100, target > 0 ? (value / target) * 100 : 0);
@@ -29,55 +28,99 @@ function GoalBar({ label, value, target, color }: { label: string; value: number
 }
 
 export default function DashboardClient({ isAdmin }: { isAdmin?: boolean }) {
-  const { orders, loading, error, lastSynced, manualSync } = useOrders();
   const { toast } = useToast();
   const confirm = useConfirm();
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastSynced, setLastSynced] = useState<Date>(new Date());
   const [sendingQRs, setSendingQRs] = useState(false);
   const [qrProgress, setQrProgress] = useState<{sent: number, remaining: number} | null>(null);
   const [emailQuota, setEmailQuota] = useState<number | null>(null);
+  const requestInFlight = useRef(false);
+  const hasSummary = useRef(false);
+  const isMounted = useRef(true);
+
+  const refreshSummary = useCallback(async () => {
+    if (requestInFlight.current) return;
+    requestInFlight.current = true;
+
+    try {
+      const data = await getDashboardSummary();
+      if (isMounted.current) {
+        setSummary(data);
+        hasSummary.current = true;
+        setLastSynced(new Date());
+        setError(null);
+      }
+    } catch (err: unknown) {
+      if (isMounted.current && !hasSummary.current) {
+        setError(err instanceof Error ? err.message : "Failed to fetch dashboard summary");
+      }
+    } finally {
+      requestInFlight.current = false;
+      if (isMounted.current) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    isMounted.current = true;
+    const initialLoad = window.setTimeout(() => { void refreshSummary(); }, 0);
+    const interval = window.setInterval(refreshSummary, 5000);
+
+    return () => {
+      isMounted.current = false;
+      window.clearTimeout(initialLoad);
+      window.clearInterval(interval);
+    };
+  }, [refreshSummary]);
 
   const refreshQuota = useCallback(() => {
     if (!isAdmin) return;
     getEmailQuota().then(setEmailQuota);
   }, [isAdmin]);
 
-  useEffect(() => { refreshQuota(); }, [refreshQuota]);
+  useEffect(() => {
+    if (isAdmin && summary && emailQuota === null) refreshQuota();
+  }, [isAdmin, summary, emailQuota, refreshQuota]);
 
-  if (loading && orders.length === 0) return <div className="p-8 font-mono">Loading dashboard...</div>;
-  if (error) return <div className="p-8 text-destructive font-mono">Error: {error}</div>;
+  if (loading && !summary) return <div className="p-8 font-mono">Loading dashboard...</div>;
+  if (error && !summary) {
+    return (
+      <div className="p-8 text-destructive font-mono space-y-4">
+        <p>Error: {error}</p>
+        <button className="border-2 border-border px-4 py-2 text-foreground" onClick={() => { setError(null); setLoading(true); refreshSummary(); }}>
+          Retry
+        </button>
+      </div>
+    );
+  }
+  if (!summary) return <div className="p-8 font-mono">Waiting for dashboard data...</div>;
 
-  const totalOrders = orders.length;
-  const paidOrders = orders.filter((o) => o["Payment Status"] === "PAID");
-  const collectedOrders = orders.filter((o) => o["Collection Status"] === "COLLECTED");
+  const totalOrders = summary.totalOrders;
+  const paidOrders = summary.paidOrders;
+  const collectedOrders = summary.collectedOrders;
 
   // Aspirational goal — a motivator, not a hard cap.
   const tshirtTarget = 250;
 
   const expectedRevenue = totalOrders * 300;
-  const receivedRevenue = paidOrders.length * 300;
-
-  const upiOrders = orders.filter((o) => o["Payment Method"] === "UPI");
-  const cashOrders = orders.filter((o) => o["Payment Method"] === "CASH");
-
-  // Calculate Size Breakdown
-  const sizes: Record<string, number> = {};
-  orders.forEach(o => {
-    const size = o["T-Shirt Size"] || "Unknown";
-    sizes[size] = (sizes[size] || 0) + 1;
-  });
-
-  const eligibleForQr = orders.filter(o => o["Payment Status"] === "PAID" && !o["QR Sent"]);
+  const receivedRevenue = paidOrders * 300;
+  const upiOrders = summary.upiOrders;
+  const cashOrders = summary.cashOrders;
+  const sizes = summary.sizes;
+  const eligibleForQr = summary.paidNoQrOrders;
 
   const handleSendTickets = async () => {
     const ok = await confirm({
       title: "Send QR tickets",
-      message: `Email a ticket to ${eligibleForQr.length} verified student${eligibleForQr.length === 1 ? "" : "s"}?`,
+      message: `Email a ticket to ${eligibleForQr} verified student${eligibleForQr === 1 ? "" : "s"}?`,
       confirmLabel: "Send",
     });
     if (!ok) return;
 
     setSendingQRs(true);
-    setQrProgress({ sent: 0, remaining: eligibleForQr.length });
+    setQrProgress({ sent: 0, remaining: eligibleForQr });
     
     try {
       let isDone = false;
@@ -113,43 +156,25 @@ export default function DashboardClient({ isAdmin }: { isAdmin?: boolean }) {
         variant: quotaHit || totalFailed > 0 ? "warning" : "success",
         duration: quotaHit || totalFailed > 0 ? 0 : 4500,
       });
-      manualSync();
+      refreshSummary();
       refreshQuota();
-    } catch (err: any) {
-      toast({ title: "Ticket send failed", description: err.message, variant: "error", duration: 0 });
+    } catch (err: unknown) {
+      toast({
+        title: "Ticket send failed",
+        description: err instanceof Error ? err.message : "The ticket send failed",
+        variant: "error",
+        duration: 0,
+      });
     } finally {
       setSendingQRs(false);
       setQrProgress(null);
     }
   };
 
-  // Calculate Activity Feed
-  const activities: Array<{ id: string, type: 'payment'|'collection', orderId: string, timestamp: Date, user: string, description: string }> = [];
-  orders.forEach(o => {
-    if (o["Payment Verified At"] && o["Payment Verified By"]) {
-      activities.push({
-        id: `${o["Order ID"]}-payment`,
-        type: 'payment',
-        orderId: o["Order ID"],
-        timestamp: new Date(o["Payment Verified At"]),
-        user: o["Payment Verified By"],
-        description: `verified payment for ${o["Order ID"]}`
-      });
-    }
-    if (o["Collected At"] && o["Collector"]) {
-      activities.push({
-        id: `${o["Order ID"]}-collection`,
-        type: 'collection',
-        orderId: o["Order ID"],
-        timestamp: new Date(o["Collected At"]),
-        user: o["Collector"],
-        description: `gave T-shirt for ${o["Order ID"]}`
-      });
-    }
-  });
-
-  activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-  const recentActivities = activities.slice(0, 10);
+  const recentActivities = summary.activities.map((activity) => ({
+    ...activity,
+    timestamp: new Date(activity.timestamp),
+  }));
 
   return (
     <div className="p-4 sm:p-8 space-y-0 container mx-auto">
@@ -167,19 +192,19 @@ export default function DashboardClient({ isAdmin }: { isAdmin?: boolean }) {
         </div>
         <div className="p-3 sm:p-6 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[140px] sm:min-h-[180px] bg-warning text-warning-foreground">
           <h2 className="text-xs font-bold uppercase tracking-[0.2em]">Pending</h2>
-          <div className="text-5xl sm:text-6xl leading-none font-black tracking-tighter">{totalOrders - paidOrders.length}</div>
+          <div className="text-5xl sm:text-6xl leading-none font-black tracking-tighter">{totalOrders - paidOrders}</div>
         </div>
         <div className="p-3 sm:p-6 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[140px] sm:min-h-[180px] bg-success text-success-foreground">
           <h2 className="text-xs font-bold uppercase tracking-[0.2em]">Paid</h2>
-          <div className="text-5xl sm:text-6xl leading-none font-black tracking-tighter">{paidOrders.length}</div>
+          <div className="text-5xl sm:text-6xl leading-none font-black tracking-tighter">{paidOrders}</div>
         </div>
         <div className="p-3 sm:p-6 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[140px] sm:min-h-[180px] bg-secondary text-secondary-foreground">
           <h2 className="text-xs font-bold uppercase tracking-[0.2em]">Paid · No QR</h2>
-          <div className="text-5xl sm:text-6xl leading-none font-black tracking-tighter">{eligibleForQr.length}</div>
+          <div className="text-5xl sm:text-6xl leading-none font-black tracking-tighter">{eligibleForQr}</div>
         </div>
         <div className="p-3 sm:p-6 border-r-2 border-b-2 border-border flex flex-col justify-between min-h-[140px] sm:min-h-[180px] bg-primary text-primary-foreground">
           <h2 className="text-xs font-bold uppercase tracking-[0.2em]">Collected</h2>
-          <div className="text-5xl sm:text-6xl leading-none font-black tracking-tighter">{collectedOrders.length}</div>
+          <div className="text-5xl sm:text-6xl leading-none font-black tracking-tighter">{collectedOrders}</div>
         </div>
       </div>
 
@@ -191,7 +216,7 @@ export default function DashboardClient({ isAdmin }: { isAdmin?: boolean }) {
           </div>
           <div className="flex flex-col sm:flex-row">
             <GoalBar label="Orders" value={totalOrders} target={tshirtTarget} color="bg-foreground" />
-            <GoalBar label="Paid" value={paidOrders.length} target={tshirtTarget} color="bg-success" />
+            <GoalBar label="Paid" value={paidOrders} target={tshirtTarget} color="bg-success" />
           </div>
         </div>
       </div>
@@ -211,8 +236,8 @@ export default function DashboardClient({ isAdmin }: { isAdmin?: boolean }) {
               <span className="text-3xl sm:text-4xl font-black tracking-tighter text-success">₹{receivedRevenue}</span>
             </div>
             <div className="flex justify-between items-center pt-2 font-bold uppercase tracking-[0.2em] text-xs text-muted-foreground">
-              <span>UPI / {upiOrders.length}</span>
-              <span>CASH / {cashOrders.length}</span>
+              <span>UPI / {upiOrders}</span>
+              <span>CASH / {cashOrders}</span>
             </div>
           </div>
         </div>
@@ -244,15 +269,15 @@ export default function DashboardClient({ isAdmin }: { isAdmin?: boolean }) {
           <div className="p-4 sm:p-6 flex flex-col justify-center min-w-full lg:min-w-[400px]">
             <div className="flex justify-between items-end mb-2">
               <span className="text-xs font-bold uppercase tracking-[0.2em]">Eligible</span>
-              <span className="text-4xl font-black tracking-tighter leading-none">{eligibleForQr.length}</span>
+              <span className="text-4xl font-black tracking-tighter leading-none">{eligibleForQr}</span>
             </div>
             <div className="flex justify-between items-center mb-4 text-[10px] font-bold uppercase tracking-[0.2em] opacity-70">
               <span>Gmail Sends Left Today</span>
               <span>{emailQuota === null ? "…" : emailQuota < 0 ? "?" : emailQuota}</span>
             </div>
-            {emailQuota !== null && emailQuota >= 0 && emailQuota < eligibleForQr.length && (
+            {emailQuota !== null && emailQuota >= 0 && emailQuota < eligibleForQr && (
               <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-warning mb-3 leading-relaxed">
-                Only {emailQuota} of {eligibleForQr.length} can send today. Run again tomorrow for the rest — no duplicates.
+                Only {emailQuota} of {eligibleForQr} can send today. Run again tomorrow for the rest — no duplicates.
               </p>
             )}
             {sendingQRs ? (
@@ -271,7 +296,7 @@ export default function DashboardClient({ isAdmin }: { isAdmin?: boolean }) {
             ) : (
               <button 
                 className="w-full font-black tracking-[0.2em] uppercase h-12 border-2 border-secondary-foreground disabled:opacity-50 hover:bg-secondary-foreground hover:text-secondary transition-colors duration-300" 
-                disabled={eligibleForQr.length === 0}
+                disabled={eligibleForQr === 0}
                 onClick={handleSendTickets}
               >
                 Send QR Tickets

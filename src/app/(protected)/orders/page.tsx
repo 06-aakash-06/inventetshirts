@@ -1,6 +1,6 @@
 "use client"
 import { useState, useMemo, useEffect } from "react";
-import { useOrders } from "@/context/OrdersContext";
+import { OrdersProvider, useOrders } from "@/context/OrdersContext";
 import { sendSingleTicket } from "@/lib/api";
 import { useToast, useConfirm } from "@/components/ui/toast";
 import Link from "next/link";
@@ -42,7 +42,7 @@ function Segmented<T extends string>({
   );
 }
 
-export default function OrdersPage() {
+function OrdersPageContent() {
   const { orders, loading, manualSync } = useOrders();
   const { toast } = useToast();
   const confirm = useConfirm();
@@ -260,5 +260,13 @@ export default function OrdersPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function OrdersPage() {
+  return (
+    <OrdersProvider>
+      <OrdersPageContent />
+    </OrdersProvider>
   );
 }

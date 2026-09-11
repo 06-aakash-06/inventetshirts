@@ -22,6 +22,26 @@ export interface Order {
 }
 
 const API_URL = "/api/orders";
+const READ_TIMEOUT_MS = 20000;
+type RawOrder = Record<string, unknown>;
+
+async function fetchJsonWithTimeout(url: string, options: RequestInit = {}, timeoutMs = READ_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    if (!response.ok) throw new Error(`Request failed (${response.status})`);
+    return await response.json();
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error("The order service took too long to respond. Showing the last available data.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 // Custom fetch with retry and jitter for mutation requests
 async function fetchWithRetry(url: string, options: RequestInit, retries = 3) {
@@ -42,16 +62,15 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 3) {
 
 export async function getOrders(): Promise<Order[]> {
   try {
-    const response = await fetch(`${API_URL}?action=getOrders`, {
+    const data = await fetchJsonWithTimeout(`${API_URL}?action=getOrders`, {
       method: "GET",
       // Next.js specific to avoid hard caching since we poll
       cache: "no-store",
     });
-    const data = await response.json();
     if (!data.success) throw new Error(data.error);
     
     // Normalize keys from messy Google Form headers
-    const normalizedData = data.data.map((order: any) => ({
+    const normalizedData = data.data.map((order: RawOrder) => ({
       ...order,
       "T-Shirt Size": order["Select T-shirt size (With size chart for reference)"] || order["T-shirt size"] || order["T-Shirt Size"] || "",
       "Payment Method": (order["Payment Method - Rs. 300"] || order["Payment Method"] || "").toString().toUpperCase().includes("UPI") ? "UPI" : "CASH",
@@ -65,6 +84,35 @@ export async function getOrders(): Promise<Order[]> {
     // Don't console.error here to avoid spamming the console on transient background polling drops
     throw error;
   }
+}
+
+export interface DashboardActivity {
+  id: string;
+  type: "payment" | "collection";
+  orderId: string;
+  timestamp: string;
+  user: string;
+  description: string;
+}
+
+export interface DashboardSummary {
+  totalOrders: number;
+  paidOrders: number;
+  collectedOrders: number;
+  paidNoQrOrders: number;
+  upiOrders: number;
+  cashOrders: number;
+  sizes: Record<string, number>;
+  activities: DashboardActivity[];
+}
+
+export async function getDashboardSummary(): Promise<DashboardSummary> {
+  const data = await fetchJsonWithTimeout(`${API_URL}?action=getDashboardSummary`, {
+    method: "GET",
+    cache: "no-store",
+  });
+  if (!data.success) throw new Error(data.error || "Failed to fetch dashboard summary");
+  return data.data;
 }
 
 export async function updatePayment(orderId: string, verifiedBy: string, status: "PAID" | "PENDING" = "PAID") {
