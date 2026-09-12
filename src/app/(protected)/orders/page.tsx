@@ -43,7 +43,7 @@ function Segmented<T extends string>({
 }
 
 function OrdersPageContent() {
-  const { orders, loading, manualSync } = useOrders();
+  const { orders, loading, error, manualSync } = useOrders();
   const { toast } = useToast();
   const confirm = useConfirm();
   const [search, setSearch] = useState("");
@@ -228,6 +228,17 @@ function OrdersPageContent() {
           <div className="p-8 text-center text-2xl font-black uppercase tracking-widest border-r-2 border-b-2 border-border">Loading...</div>
         ) : remoteLoading && visibleOrders.length === 0 ? (
           <div className="p-8 text-center text-2xl font-black uppercase tracking-widest border-r-2 border-b-2 border-border">Searching...</div>
+        ) : error && visibleOrders.length === 0 && !search.trim() ? (
+          <div className="p-8 text-center border-r-2 border-b-2 border-border space-y-4" role="alert">
+            <p className="text-xl font-black uppercase tracking-widest">Orders could not be loaded</p>
+            <p className="text-sm font-mono text-muted-foreground">{error}</p>
+            <button
+              onClick={manualSync}
+              className="border-2 border-foreground px-6 py-3 font-black uppercase tracking-widest hover:bg-foreground hover:text-background transition-colors"
+            >
+              Retry
+            </button>
+          </div>
         ) : (
           <div className="flex flex-col">
             {filteredOrders.length === 0 ? (

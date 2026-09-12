@@ -1,6 +1,7 @@
 "use client"
 import { useCallback, useEffect, useState } from "react";
 import { getOrder, Order, updatePayment, updateCollection, updateNotes, sendSingleTicket } from "@/lib/api";
+import { findCachedOrder } from "@/lib/order-cache";
 import { useToast, useConfirm } from "@/components/ui/toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,13 +20,15 @@ export default function OrderDetailClient({ orderId, userName, isAdmin }: { orde
   const [editingNotes, setEditingNotes] = useState(false);
 
   const reload = useCallback(async () => {
+    const cachedOrder = findCachedOrder(orderId);
+    if (cachedOrder) setOrder(cachedOrder);
     setLoading(true);
     try {
       const data = await getOrder(orderId);
       setOrder(data);
       setLoadError(null);
     } catch (err: unknown) {
-      setLoadError(err instanceof Error ? err.message : "Failed to load order");
+      if (!cachedOrder) setLoadError(err instanceof Error ? err.message : "Failed to load order");
     } finally {
       setLoading(false);
     }

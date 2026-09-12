@@ -1,6 +1,7 @@
 "use client"
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { getOrders, Order } from "@/lib/api";
+import { ORDER_CACHE_UPDATED_EVENT, readOrdersSnapshot, saveOrdersSnapshot } from "@/lib/order-cache";
 
 interface OrdersContextType {
   orders: Order[];
@@ -12,10 +13,6 @@ interface OrdersContextType {
 }
 
 const OrdersContext = createContext<OrdersContextType | undefined>(undefined);
-// v2 discards snapshots created before server-side revision validation was
-// added, preventing an old browser count from appearing beside a fresh
-// dashboard count after deployment.
-const ORDERS_STORAGE_KEY = "invente-orders-v2";
 const ORDERS_POLL_MS = 15000;
 
 export function OrdersProvider({ children }: { children: React.ReactNode }) {
@@ -36,11 +33,7 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
         hasData.current = true;
         setLastSynced(new Date());
         setError(null);
-        try {
-          window.localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify({ savedAt: Date.now(), data }));
-        } catch {
-          // Browser storage is only a stale-data convenience, never a requirement.
-        }
+        saveOrdersSnapshot(data);
       }
     } catch (err: any) {
       // Only disrupt the UI with an error if it's the initial load. Ignore background polling transient errors.
@@ -56,24 +49,31 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     isMounted.current = true;
     const initialLoad = window.setTimeout(() => {
-      try {
-        const stored = window.localStorage.getItem(ORDERS_STORAGE_KEY);
-        const parsed = stored ? JSON.parse(stored) : null;
-        if (Array.isArray(parsed?.data) && parsed.data.length > 0 && isMounted.current) {
-          setOrders(parsed.data);
+      const snapshot = readOrdersSnapshot();
+      if (snapshot && isMounted.current) {
+          setOrders(snapshot.data);
           hasData.current = true;
           setLoading(false);
-          setLastSynced(new Date(Number(parsed.savedAt) || Date.now()));
-        }
-      } catch {
-        // Ignore malformed/blocked browser storage and use the live request.
+          setLastSynced(new Date(snapshot.savedAt || Date.now()));
       }
       void fetchOrders();
     }, 0);
+    const handleCacheUpdate = () => {
+      const snapshot = readOrdersSnapshot();
+      if (!snapshot || !isMounted.current) return;
+      setOrders(snapshot.data);
+      hasData.current = true;
+      setLoading(false);
+      setLastSynced(new Date(snapshot.savedAt || Date.now()));
+    };
+    window.addEventListener(ORDER_CACHE_UPDATED_EVENT, handleCacheUpdate);
+    window.addEventListener("storage", handleCacheUpdate);
     return () => {
       isMounted.current = false;
       window.clearTimeout(initialLoad);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      window.removeEventListener(ORDER_CACHE_UPDATED_EVENT, handleCacheUpdate);
+      window.removeEventListener("storage", handleCacheUpdate);
     };
   }, []);
 

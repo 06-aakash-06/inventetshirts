@@ -1,3 +1,5 @@
+import { saveOrdersSnapshot, updateCachedOrder } from "./order-cache";
+
 export interface Order {
   _rowIndex?: number;
   "Timestamp": string;
@@ -79,17 +81,19 @@ function normalizeOrder(order: RawOrder): Order {
   } as Order;
 }
 
-export async function getOrders(): Promise<Order[]> {
+export async function getOrders(signal?: AbortSignal): Promise<Order[]> {
   try {
     const data = await fetchJsonWithTimeout(`${API_URL}?action=getOrders`, {
       method: "GET",
       // Next.js specific to avoid hard caching since we poll
       cache: "no-store",
+      signal,
     });
     if (!data.success) throw new Error(data.error);
     
     // Normalize keys from messy Google Form headers
     const normalizedData = data.data.map(normalizeOrder);
+    saveOrdersSnapshot(normalizedData);
 
     return normalizedData;
   } catch (error) {
@@ -105,7 +109,9 @@ export async function getOrder(reference: string, signal?: AbortSignal): Promise
     signal,
   }, ORDER_LOOKUP_TIMEOUT_MS);
   if (!data.success) throw new Error(data.error || "Order not found");
-  return normalizeOrder(data.data as RawOrder);
+  const order = normalizeOrder(data.data as RawOrder);
+  updateCachedOrder(order);
+  return order;
 }
 
 export async function searchOrders(query: string, signal?: AbortSignal): Promise<Order[]> {
@@ -148,7 +154,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 }
 
 export async function updatePayment(orderId: string, verifiedBy: string, status: "PAID" | "PENDING" = "PAID") {
-  return fetchWithRetry(API_URL, {
+  const data = await fetchWithRetry(API_URL, {
     method: "POST",
     body: JSON.stringify({
       action: "updatePayment",
@@ -158,6 +164,8 @@ export async function updatePayment(orderId: string, verifiedBy: string, status:
       verifiedAt: new Date().toISOString()
     })
   });
+  if (data?.data) updateCachedOrder(normalizeOrder(data.data as RawOrder));
+  return data;
 }
 
 export async function updateCollection(
@@ -165,7 +173,7 @@ export async function updateCollection(
   collector: string,
   status: "COLLECTED" | "NOT_COLLECTED" = "COLLECTED"
 ) {
-  return fetchWithRetry(API_URL, {
+  const data = await fetchWithRetry(API_URL, {
     method: "POST",
     body: JSON.stringify({
       action: "updateCollection",
@@ -176,6 +184,8 @@ export async function updateCollection(
       collectedAt: new Date().toISOString()
     })
   });
+  if (data?.data) updateCachedOrder(normalizeOrder(data.data as RawOrder));
+  return data;
 }
 
 // Force-send (or resend) one ticket, ignoring the QR Sent flag.
@@ -187,7 +197,7 @@ export async function sendSingleTicket(orderId: string) {
 }
 
 export async function updateNotes(orderId: string, notes: string) {
-  return fetchWithRetry(API_URL, {
+  const data = await fetchWithRetry(API_URL, {
     method: "POST",
     body: JSON.stringify({
       action: "updateNotes",
@@ -195,6 +205,8 @@ export async function updateNotes(orderId: string, notes: string) {
       notes
     })
   });
+  if (data?.data) updateCachedOrder(normalizeOrder(data.data as RawOrder));
+  return data;
 }
 
 export interface QrBatchResult {

@@ -1,7 +1,8 @@
 "use client"
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Html5Qrcode } from "html5-qrcode";
-import { getOrder, Order, updateCollection } from "@/lib/api";
+import { getOrder, getOrders, Order, updateCollection } from "@/lib/api";
+import { findCachedOrder, readOrdersSnapshot, updateCachedOrder } from "@/lib/order-cache";
 import { useToast } from "@/components/ui/toast";
 import { Check, X, AlertTriangle } from "lucide-react";
 
@@ -24,6 +25,7 @@ export default function CollectionClient({ userName }: { userName: string }) {
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [lookupRequested, setLookupRequested] = useState(false);
+  const [lookupVerified, setLookupVerified] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [confirmGive, setConfirmGive] = useState(false);
@@ -33,6 +35,26 @@ export default function CollectionClient({ userName }: { userName: string }) {
 
   useEffect(() => {
     document.title = "Distribution · INVENTE 11.0";
+  }, []);
+
+  // Warm the shared order snapshot without delaying the kiosk. A cached
+  // preview can render immediately; this refresh prepares later scans in the
+  // same browser while the authoritative lookup remains available as a
+  // fallback.
+  useEffect(() => {
+    const snapshot = readOrdersSnapshot();
+    if (snapshot && Date.now() - snapshot.savedAt < 30000) return;
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void getOrders(controller.signal).catch(() => {
+        // Direct one-order lookup still handles a scan if prefetch is slow.
+      });
+    }, 750);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
   }, []);
 
   useEffect(() => {
@@ -68,17 +90,27 @@ export default function CollectionClient({ userName }: { userName: string }) {
     };
   }, [isScanning, toast]);
 
-  const lookupOrder = useCallback(async (reference: string, requestId: number, signal: AbortSignal) => {
+  const lookupOrder = useCallback(async (
+    reference: string,
+    requestId: number,
+    signal: AbortSignal,
+    cachedPreview: Order | null,
+  ) => {
     setLookupLoading(true);
     setLookupError(null);
+    if (cachedPreview) setMatchedOrder(cachedPreview);
     try {
       const order = await getOrder(reference, signal);
       if (lookupRequestRef.current !== requestId) return;
       setMatchedOrder(order);
+      setLookupVerified(true);
     } catch (err: unknown) {
       if (lookupRequestRef.current !== requestId) return;
-      setMatchedOrder(null);
-      setLookupError(err instanceof Error ? err.message : "Could not find that order");
+      setLookupVerified(false);
+      if (!cachedPreview) setMatchedOrder(null);
+      setLookupError(cachedPreview
+        ? "Live verification failed. Retry before giving the shirt."
+        : err instanceof Error ? err.message : "Could not find that order");
     } finally {
       if (lookupRequestRef.current === requestId) setLookupLoading(false);
     }
@@ -98,10 +130,12 @@ export default function CollectionClient({ userName }: { userName: string }) {
 
     const controller = new AbortController();
     lookupAbortRef.current = controller;
+    const cachedPreview = findCachedOrder(reference);
     setLookupRequested(true);
-    setMatchedOrder(null);
+    setMatchedOrder(cachedPreview);
+    setLookupVerified(false);
     setLookupError(null);
-    void lookupOrder(reference, requestId, controller.signal);
+    void lookupOrder(reference, requestId, controller.signal, cachedPreview);
   }, [lookupOrder]);
 
   // QR scans should resolve immediately. Manual searches are submitted with
@@ -115,10 +149,11 @@ export default function CollectionClient({ userName }: { userName: string }) {
   const paid = matchedOrder?.["Payment Status"] === "PAID";
   const qrSent = !!matchedOrder?.["QR Sent"];
   const collected = matchedOrder?.["Collection Status"] === "COLLECTED";
-  const canGive = !!matchedOrder && paid && qrSent && !collected;
+  const canGive = lookupVerified && !!matchedOrder && paid && qrSent && !collected;
 
   const blockReason = !matchedOrder ? null
     : collected ? null
+    : !lookupVerified ? (lookupError || "Checking live order status")
     : !paid ? "Payment not verified"
     : !qrSent ? "Ticket not emailed yet"
     : null;
@@ -132,6 +167,7 @@ export default function CollectionClient({ userName }: { userName: string }) {
     setLookupError(null);
     setLookupLoading(false);
     setLookupRequested(false);
+    setLookupVerified(false);
   };
 
   const setCollection = async (status: "COLLECTED" | "NOT_COLLECTED", ref: { orderId: string; token?: string }) => {
@@ -141,7 +177,10 @@ export default function CollectionClient({ userName }: { userName: string }) {
       status,
     );
     if (res?.success && res.data) {
-      setMatchedOrder(prev => prev ? { ...prev, ...res.data } : res.data);
+      const updatedOrder = res.data as Order;
+      updateCachedOrder(updatedOrder);
+      setMatchedOrder(prev => prev ? { ...prev, ...updatedOrder } : updatedOrder);
+      setLookupVerified(true);
     } else if (res?.success) {
       requestLookup(ref.orderId);
     }
@@ -208,6 +247,7 @@ export default function CollectionClient({ userName }: { userName: string }) {
             setLookupError(null);
             setLookupLoading(false);
             setLookupRequested(false);
+            setLookupVerified(false);
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -246,7 +286,7 @@ export default function CollectionClient({ userName }: { userName: string }) {
 
       {lookupRequested && lookupLoading && (
         <div className="p-4 sm:p-8 border-2 border-border bg-muted text-muted-foreground text-center font-black uppercase tracking-widest text-lg sm:text-xl mb-8 sm:mb-12">
-          Looking up order...
+          {matchedOrder ? "Refreshing live order status..." : "Looking up order..."}
         </div>
       )}
 
