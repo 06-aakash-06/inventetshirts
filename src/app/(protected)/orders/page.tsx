@@ -1,7 +1,7 @@
 "use client"
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { OrdersProvider, useOrders } from "@/context/OrdersContext";
-import { sendSingleTicket } from "@/lib/api";
+import { Order, searchOrders, sendSingleTicket } from "@/lib/api";
 import { useToast, useConfirm } from "@/components/ui/toast";
 import Link from "next/link";
 
@@ -52,13 +52,51 @@ function OrdersPageContent() {
   const [filterQr, setFilterQr] = useState<QrFilter>("ALL");
   const [filterMethod, setFilterMethod] = useState<MethodFilter>("ALL");
   const [sendingId, setSendingId] = useState<string | null>(null);
+  const [remoteOrders, setRemoteOrders] = useState<Order[]>([]);
+  const [remoteLoading, setRemoteLoading] = useState(false);
+  const [remoteError, setRemoteError] = useState<string | null>(null);
+  const remoteSearchAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     document.title = "Orders · INVENTE 11.0";
   }, []);
 
+  useEffect(() => {
+    remoteSearchAbortRef.current?.abort();
+    remoteSearchAbortRef.current = null;
+    setRemoteOrders([]);
+    setRemoteError(null);
+    setRemoteLoading(false);
+
+    const query = search.trim();
+    if (orders.length > 0 || query.length < 3) return;
+
+    const controller = new AbortController();
+    remoteSearchAbortRef.current = controller;
+    const timer = window.setTimeout(() => {
+      setRemoteLoading(true);
+      void searchOrders(query, controller.signal)
+        .then((data) => {
+          if (!controller.signal.aborted) setRemoteOrders(data);
+        })
+        .catch((err: unknown) => {
+          if (!controller.signal.aborted) setRemoteError(err instanceof Error ? err.message : "Order search failed");
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setRemoteLoading(false);
+        });
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [orders.length, search]);
+
+  const visibleOrders = orders.length > 0 ? orders : remoteOrders;
+
   const filteredOrders = useMemo(() => {
-    return orders.filter(o => {
+    return visibleOrders.filter(o => {
       const s = search.trim().toLowerCase();
       const matchesSearch = !s || (
         String(o["Order ID"] || "").toLowerCase().includes(s) ||
@@ -77,7 +115,7 @@ function OrdersPageContent() {
 
       return matchesSearch && matchesPayment && matchesCollection && matchesQr && matchesMethod;
     }).sort((a, b) => new Date(b.Timestamp).getTime() - new Date(a.Timestamp).getTime());
-  }, [orders, search, filterPayment, filterCollection, filterQr, filterMethod]);
+  }, [visibleOrders, search, filterPayment, filterCollection, filterQr, filterMethod]);
 
   const applyPaidNoQr = () => {
     setFilterPayment("PAID");
@@ -186,13 +224,15 @@ function OrdersPageContent() {
       </div>
 
       <div className="flex-1 overflow-auto border-t-2 border-l-2 border-border">
-        {loading && orders.length === 0 ? (
+        {loading && visibleOrders.length === 0 && !remoteLoading ? (
           <div className="p-8 text-center text-2xl font-black uppercase tracking-widest border-r-2 border-b-2 border-border">Loading...</div>
+        ) : remoteLoading && visibleOrders.length === 0 ? (
+          <div className="p-8 text-center text-2xl font-black uppercase tracking-widest border-r-2 border-b-2 border-border">Searching...</div>
         ) : (
           <div className="flex flex-col">
             {filteredOrders.length === 0 ? (
               <div className="p-8 text-center text-xl font-bold uppercase tracking-widest text-muted-foreground border-r-2 border-b-2 border-border">
-                No orders found
+                {remoteError || "No orders found"}
               </div>
             ) : (
               filteredOrders.map(o => {

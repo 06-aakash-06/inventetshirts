@@ -2,6 +2,7 @@ const SHEET_NAME = "Form Responses 1"; // Make sure to adjust if your sheet name
 const ORDERS_CACHE_META_KEY = "INVENTE_ORDERS_V3_META";
 const ORDERS_CACHE_CHUNK_PREFIX = "INVENTE_ORDERS_V3_CHUNK_";
 const DASHBOARD_CACHE_KEY = "INVENTE_DASHBOARD_V1";
+const DASHBOARD_SOURCE_ROW_KEY = "INVENTE_DASHBOARD_SOURCE_ROW_V1";
 const CACHE_TIME = 300; // Sheet writes invalidate order chunks, so keep read bursts warm for five minutes.
 const DASHBOARD_CACHE_TIME = 60; // Active dashboards refresh this lease; writes update the cached counters.
 const CACHE_CHUNK_CHARS = 30000; // Keep every CacheService value safely below its per-value limit.
@@ -56,7 +57,16 @@ function ordersCacheChunkKey_(version, index) {
   return ORDERS_CACHE_CHUNK_PREFIX + version + "_" + index;
 }
 
-function cachedOrders_() {
+function currentSheetLastRow_() {
+  try {
+    return getSheet().getLastRow();
+  } catch (err) {
+    Logger.log("Sheet revision check skipped: " + String((err && err.message) || err));
+    return null;
+  }
+}
+
+function cachedOrders_(validateSource) {
   try {
     const cache = CacheService.getScriptCache();
     const metadata = cache.get(ORDERS_CACHE_META_KEY);
@@ -66,6 +76,13 @@ function cachedOrders_() {
     const version = String(parsed && parsed.version || "");
     const count = Number(parsed && parsed.count);
     if (!version || !count || count < 1 || count > 1000) return null;
+    if (validateSource) {
+      const cachedLastRow = Number(parsed && parsed.sourceLastRow || 0);
+      const currentLastRow = currentSheetLastRow_();
+      // Older cache metadata has no revision. Treat it as a miss once so the
+      // next successful response records a revision for both dashboard/views.
+      if (!cachedLastRow || (currentLastRow !== null && cachedLastRow !== currentLastRow)) return null;
+    }
 
     const keys = [];
     for (let i = 0; i < count; i++) {
@@ -104,7 +121,7 @@ function findOrderInCachedJson_(json, lookup) {
   return null;
 }
 
-function cacheOrders_(value) {
+function cacheOrders_(value, sourceLastRow) {
   if (!value) return;
 
   const count = Math.ceil(value.length / CACHE_CHUNK_CHARS);
@@ -116,12 +133,17 @@ function cacheOrders_(value) {
   try {
     const cache = CacheService.getScriptCache();
     const version = String(Date.now()) + "_" + String(Math.floor(Math.random() * 1000000));
+    const resolvedLastRow = Number(sourceLastRow || currentSheetLastRow_() || 0);
     // Publish metadata last. A reader continues using the previous complete
     // version while this new version is being written.
     for (let i = 0; i < count; i++) {
       cache.put(ordersCacheChunkKey_(version, i), value.substring(i * CACHE_CHUNK_CHARS, (i + 1) * CACHE_CHUNK_CHARS), CACHE_TIME);
     }
-    cache.put(ORDERS_CACHE_META_KEY, JSON.stringify({ version: version, count: count }), CACHE_TIME);
+    cache.put(ORDERS_CACHE_META_KEY, JSON.stringify({
+      version: version,
+      count: count,
+      sourceLastRow: resolvedLastRow || null
+    }), CACHE_TIME);
   } catch (err) {
     Logger.log("Orders cache write skipped: " + String((err && err.message) || err));
   }
@@ -146,10 +168,25 @@ function cachedDashboardSummary_() {
   }
 }
 
-function cacheDashboardSummary_(value) {
+function dashboardSummaryIsCurrent_() {
+  try {
+    const cache = CacheService.getScriptCache();
+    const cachedLastRow = Number(cache.get(DASHBOARD_SOURCE_ROW_KEY) || 0);
+    const currentLastRow = currentSheetLastRow_();
+    return !!cachedLastRow && (currentLastRow === null || cachedLastRow === currentLastRow);
+  } catch (err) {
+    Logger.log("Dashboard revision check skipped: " + String((err && err.message) || err));
+    return false;
+  }
+}
+
+function cacheDashboardSummary_(value, sourceLastRow) {
   if (!value) return;
   try {
-    CacheService.getScriptCache().put(DASHBOARD_CACHE_KEY, value, DASHBOARD_CACHE_TIME);
+    const cache = CacheService.getScriptCache();
+    const resolvedLastRow = Number(sourceLastRow || currentSheetLastRow_() || 0);
+    cache.put(DASHBOARD_CACHE_KEY, value, DASHBOARD_CACHE_TIME);
+    if (resolvedLastRow) cache.put(DASHBOARD_SOURCE_ROW_KEY, String(resolvedLastRow), DASHBOARD_CACHE_TIME);
   } catch (err) {
     Logger.log("Dashboard cache write skipped: " + String((err && err.message) || err));
   }
@@ -157,7 +194,9 @@ function cacheDashboardSummary_(value) {
 
 function invalidateDashboardSummary_() {
   try {
-    CacheService.getScriptCache().remove(DASHBOARD_CACHE_KEY);
+    const cache = CacheService.getScriptCache();
+    cache.remove(DASHBOARD_CACHE_KEY);
+    cache.remove(DASHBOARD_SOURCE_ROW_KEY);
   } catch (err) {
     Logger.log("Dashboard cache invalidation skipped: " + String((err && err.message) || err));
   }
@@ -288,6 +327,48 @@ function findRowByAnyColumnValue_(sheet, columnIndices, value) {
   }
 }
 
+// Partial, read-only search used when the Orders page has not finished loading
+// the full snapshot. It searches the relevant identity columns in one Sheet
+// service operation and returns only matching rows.
+function findRowsBySearchText_(sheet, columnIndices, query, maxResults) {
+  const wanted = normalizedText_(query);
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+  if (!wanted || lastRow < 2 || lastColumn < 1) return [];
+
+  const allowedColumns = {};
+  columnIndices.forEach(function (columnIndex) {
+    if (columnIndex >= 0) allowedColumns[columnIndex] = true;
+  });
+
+  try {
+    const matches = sheet.getRange(2, 1, lastRow - 1, lastColumn)
+      .createTextFinder(wanted)
+      .matchCase(false)
+      .matchEntireCell(false)
+      .useRegularExpression(false)
+      .findAll();
+    const rows = {};
+    matches.forEach(function (match) {
+      if (allowedColumns[match.getColumn() - 1]) rows[match.getRow()] = true;
+    });
+
+    const rowNumbers = Object.keys(rows).map(Number).sort(function (a, b) { return a - b; });
+    if (!rowNumbers.length) return [];
+    const selectedRows = rowNumbers.slice(0, maxResults || 50);
+    const firstRow = selectedRows[0];
+    const lastSelectedRow = selectedRows[selectedRows.length - 1];
+    const values = sheet.getRange(firstRow, 1, lastSelectedRow - firstRow + 1, lastColumn).getValues();
+    const headers = readHeaders_(sheet);
+    return selectedRows.map(function (rowNumber) {
+      return rowToObject(values[rowNumber - firstRow], headers, rowNumber);
+    });
+  } catch (err) {
+    Logger.log("Search lookup skipped: " + String((err && err.message) || err));
+    return [];
+  }
+}
+
 // Same deterministic ID calculation used by getOrdersFromSheet(), but purely
 // in memory. This lets a just-submitted row be updated before its installable
 // form-submit trigger runs without writing or repairing any other Sheet row.
@@ -397,19 +478,22 @@ function doGet(e) {
     }
   }
 
+  if (action === "searchOrders") {
+    const query = e.parameter.q || "";
+    try {
+      const data = searchOrdersFromSheet_(query);
+      return jsonResponse_({ success: true, data: data });
+    } catch (error) {
+      return jsonResponse_({ success: false, error: error.toString() });
+    }
+  }
+
   if (action === "getDashboardSummary") {
     if (!noCache) {
-      const cachedSummary = cachedDashboardSummary_();
-      if (cachedSummary) {
-        // CacheService expiration is fixed from the last put. Refresh the
-        // small summary lease while a dashboard is actively polling.
-        cacheDashboardSummary_(cachedSummary);
-        return textJsonResponse_(cachedSummary);
-      }
-
       // If the full order cache is warm, derive the small dashboard response
-      // without touching Google Sheets again.
-      const cachedData = cachedOrders_();
+      // Prefer the same revision used by the Orders page so the totals cannot
+      // drift between the full list and the dashboard summary.
+      const cachedData = cachedOrders_(true);
       if (cachedData) {
         try {
           const parsed = JSON.parse(cachedData);
@@ -421,6 +505,14 @@ function doGet(e) {
         } catch (err) {
           Logger.log("Dashboard summary from orders cache skipped: " + String((err && err.message) || err));
         }
+      }
+
+      const cachedSummary = cachedDashboardSummary_();
+      if (cachedSummary && dashboardSummaryIsCurrent_()) {
+        // CacheService expiration is fixed from the last put. Refresh the
+        // small summary lease while a dashboard is actively polling.
+        cacheDashboardSummary_(cachedSummary);
+        return textJsonResponse_(cachedSummary);
       }
     }
 
@@ -439,7 +531,7 @@ function doGet(e) {
 
   if (action === "getOrders") {
     if (!noCache) {
-      const cachedData = cachedOrders_();
+      const cachedData = cachedOrders_(true);
       if (cachedData) {
         return textJsonResponse_(cachedData);
       }
@@ -834,6 +926,41 @@ function getOrderFromSheet_(reference) {
   if (rowNumber === -1) throw new Error("Order not found");
   const row = sheet.getRange(rowNumber, 1, 1, sheet.getLastColumn()).getValues()[0];
   return rowToObject(row, headers, rowNumber);
+}
+
+function searchOrdersFromSheet_(query) {
+  const wanted = normalizedText_(query);
+  if (wanted.length < 3) return [];
+
+  const cachedData = cachedOrders_(true);
+  if (cachedData) {
+    try {
+      const parsed = JSON.parse(cachedData);
+      const orders = parsed && Array.isArray(parsed.data) ? parsed.data : [];
+      const lowerQuery = wanted.toLowerCase();
+      return orders.filter(function (order) {
+        return ["Order ID", "Name", "Register Number", "Digital ID", "Phone Number", "College Email"]
+          .some(function (key) { return normalizedText_(order[key]).toLowerCase().indexOf(lowerQuery) !== -1; });
+      }).slice(0, 50);
+    } catch (err) {
+      Logger.log("Cached search skipped: " + String((err && err.message) || err));
+    }
+  }
+
+  const sheet = getSheet();
+  const headers = readHeaders_(sheet);
+  const aliases = [
+    ["Order ID"],
+    ["Name"],
+    ["Register Number", "Reg No"],
+    ["Digital ID"],
+    ["Phone Number"],
+    ["College Email ID", "Email Address", "College Email"]
+  ];
+  const columnIndices = aliases.map(function (columnAliases) {
+    return findHeaderIndex_(headers, columnAliases);
+  });
+  return findRowsBySearchText_(sheet, columnIndices, wanted, 50);
 }
 
 function buildDashboardSummary_(orders) {

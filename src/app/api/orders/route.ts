@@ -59,6 +59,9 @@ export async function GET(request: Request) {
     if (action === "getOrder") {
       const reference = searchParams.get("ref") || searchParams.get("orderId") || searchParams.get("token");
       if (reference) upstreamParams.set("ref", reference);
+    } else if (action === "searchOrders") {
+      const query = searchParams.get("q");
+      if (query) upstreamParams.set("q", query);
     }
 
     const response = await fetch(withToken(`${APPS_SCRIPT_URL}?${upstreamParams.toString()}`), {

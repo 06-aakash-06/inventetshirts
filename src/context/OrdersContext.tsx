@@ -12,7 +12,10 @@ interface OrdersContextType {
 }
 
 const OrdersContext = createContext<OrdersContextType | undefined>(undefined);
-const ORDERS_STORAGE_KEY = "invente-orders-v1";
+// v2 discards snapshots created before server-side revision validation was
+// added, preventing an old browser count from appearing beside a fresh
+// dashboard count after deployment.
+const ORDERS_STORAGE_KEY = "invente-orders-v2";
 const ORDERS_POLL_MS = 15000;
 
 export function OrdersProvider({ children }: { children: React.ReactNode }) {

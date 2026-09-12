@@ -108,6 +108,16 @@ export async function getOrder(reference: string, signal?: AbortSignal): Promise
   return normalizeOrder(data.data as RawOrder);
 }
 
+export async function searchOrders(query: string, signal?: AbortSignal): Promise<Order[]> {
+  const data = await fetchJsonWithTimeout(`${API_URL}?action=searchOrders&q=${encodeURIComponent(query)}`, {
+    method: "GET",
+    cache: "no-store",
+    signal,
+  }, ORDER_LOOKUP_TIMEOUT_MS);
+  if (!data.success) throw new Error(data.error || "Order search failed");
+  return Array.isArray(data.data) ? data.data.map(normalizeOrder) : [];
+}
+
 export interface DashboardActivity {
   id: string;
   type: "payment" | "collection";
